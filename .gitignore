@@ -1,0 +1,39 @@
+# Sekrety
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+application-local.*
+secrets/
+
+# Backend (Java / Gradle)
+.gradle/
+build/
+out/
+*.class
+
+# Frontend (Node)
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logi
+*.log
+
+# Lokalne dane bazy
+infra/data/
+
+# IDE / system
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
