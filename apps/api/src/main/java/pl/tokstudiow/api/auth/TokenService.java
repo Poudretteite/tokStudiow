@@ -1,13 +1,12 @@
 package pl.tokstudiow.api.auth;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
+import pl.tokstudiow.api.user.User;
 
 import java.time.Instant;
 
@@ -24,21 +23,14 @@ public class TokenService {
         this.properties = properties;
     }
 
-    public String issueAccessToken(Authentication authentication) {
+    public String issueAccessToken(User user) {
         Instant now = Instant.now();
-        String role = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .filter(a -> a.startsWith("ROLE_"))
-                .map(a -> a.substring("ROLE_".length()))
-                .findFirst()
-                .orElseThrow();
-
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(ISSUER)
                 .issuedAt(now)
                 .expiresAt(now.plus(properties.accessTokenTtl()))
-                .subject(authentication.getName())
-                .claim("role", role)
+                .subject(user.getId().toString())
+                .claim("role", user.getRole().name())
                 .build();
 
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();

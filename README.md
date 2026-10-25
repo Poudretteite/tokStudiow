@@ -12,3 +12,4 @@ Aplikacja webowa odwzorowująca uczelniany system zarządzania tokiem studiów. 
 apps/
 └── api/    backend (Spring Boot)
 ```
+![CI](https://github.com/Poudretteite/tokStudiow/actions/workflows/ci.yml/badge.svg)

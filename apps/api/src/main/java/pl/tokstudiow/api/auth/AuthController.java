@@ -3,9 +3,6 @@ package pl.tokstudiow.api.auth;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,27 +14,26 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
-    private final TokenService tokenService;
-    private final JwtProperties properties;
+    private final AuthService authService;
 
-    public AuthController(AuthenticationManager authenticationManager,
-                          TokenService tokenService,
-                          JwtProperties properties) {
-        this.authenticationManager = authenticationManager;
-        this.tokenService = tokenService;
-        this.properties = properties;
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                UsernamePasswordAuthenticationToken.unauthenticated(request.email(), request.password()));
+    public TokenResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request.email(), request.password());
+    }
 
-        return new LoginResponse(
-                tokenService.issueAccessToken(authentication),
-                "Bearer",
-                properties.accessTokenTtl().toSeconds());
+    @PostMapping("/refresh")
+    public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
+        return authService.refresh(request.refreshToken());
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request.refreshToken());
     }
 
     @GetMapping("/me")
@@ -48,5 +44,10 @@ public class AuthController {
     @ExceptionHandler(AuthenticationException.class)
     public ProblemDetail handleAuthenticationFailure() {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ProblemDetail handleInvalidRefreshToken() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
     }
 }
