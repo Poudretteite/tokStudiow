@@ -6,6 +6,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.DynamicPropertyRegistrar;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -22,5 +24,10 @@ public class TestcontainersConfiguration {
     @Bean
     DynamicPropertyRegistrar testProperties() {
         return registry -> registry.add("app.jwt.secret", () -> TEST_JWT_SECRET);
+    }
+
+    @Bean
+    DatabaseCleaner databaseCleaner(JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
+        return new DatabaseCleaner(jdbc, transactionManager);
     }
 }
