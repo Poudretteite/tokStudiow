@@ -1,21 +1,11 @@
 package pl.tokstudiow.api.university;
 
-import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import pl.tokstudiow.api.DatabaseCleaner;
-import pl.tokstudiow.api.TestcontainersConfiguration;
+import pl.tokstudiow.api.IntegrationTest;
 import pl.tokstudiow.api.user.Role;
-import pl.tokstudiow.api.user.User;
-import pl.tokstudiow.api.user.UserRepository;
 
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -24,26 +14,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
-class FacultyAndFieldOfStudyTest {
-
-    private static final String PASSWORD = "Correct-Horse-Battery-1";
-
-    @Autowired MockMvc mvc;
-    @Autowired UserRepository users;
-    @Autowired PasswordEncoder passwordEncoder;
-    @Autowired DatabaseCleaner databaseCleaner;
+class FacultyAndFieldOfStudyTest extends IntegrationTest {
 
     private String adminToken;
     private String studentToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        databaseCleaner.clean();
-        users.save(new User("Ada", "Admin", "admin@test.pl", passwordEncoder.encode(PASSWORD), Role.ADMIN));
-        users.save(new User("Anna", "Nowak", "anna@test.pl", passwordEncoder.encode(PASSWORD), Role.STUDENT));
+        createUser("Ada", "Admin", "admin@test.pl", Role.ADMIN);
+        createUser("Anna", "Nowak", "anna@test.pl", Role.STUDENT);
         adminToken = tokenFor("admin@test.pl");
         studentToken = tokenFor("anna@test.pl");
     }
@@ -78,7 +57,7 @@ class FacultyAndFieldOfStudyTest {
     void creatingFacultyIsAudited() throws Exception {
         String id = idOf(createFaculty("Wydział Medyczny", "WM").andExpect(status().isCreated()));
 
-        auditHistory("faculty", id)
+        auditHistory("faculty", id, adminToken)
                 .andExpect(jsonPath("$[0].action").value("CREATE"))
                 .andExpect(jsonPath("$[0].newValue.shortName").value("WM"));
     }
@@ -101,7 +80,7 @@ class FacultyAndFieldOfStudyTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Kolegium Nauk Medycznych"));
 
-        auditHistory("faculty", id)
+        auditHistory("faculty", id, adminToken)
                 .andExpect(jsonPath("$[0].action").value("UPDATE"))
                 .andExpect(jsonPath("$[0].oldValue.name").value("Wydział Medyczny"))
                 .andExpect(jsonPath("$[0].newValue.name").value("Kolegium Nauk Medycznych"));
@@ -165,34 +144,9 @@ class FacultyAndFieldOfStudyTest {
                         """.formatted(facultyId, name, level, mode, semesters)));
     }
 
-    private ResultActions auditHistory(String entityType, String entityId) throws Exception {
-        return mvc.perform(get("/api/admin/audit-log")
-                .param("entityType", entityType)
-                .param("entityId", entityId)
-                .header(AUTHORIZATION, bearer(adminToken)));
-    }
-
     private static String facultyJson(String name, String shortName) {
         return """
                 {"name": "%s", "shortName": "%s"}
                 """.formatted(name, shortName);
-    }
-
-    private static String idOf(ResultActions result) throws Exception {
-        return JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.id");
-    }
-
-    private String tokenFor(String email) throws Exception {
-        String json = mvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email": "%s", "password": "%s"}
-                                """.formatted(email, PASSWORD)))
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(json, "$.accessToken");
-    }
-
-    private static String bearer(String token) {
-        return "Bearer " + token;
     }
 }
