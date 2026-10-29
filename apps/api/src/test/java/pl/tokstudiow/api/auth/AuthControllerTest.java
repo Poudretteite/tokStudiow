@@ -15,6 +15,7 @@ import pl.tokstudiow.api.TestcontainersConfiguration;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
 import pl.tokstudiow.api.user.UserRepository;
+import pl.tokstudiow.api.DatabaseCleaner;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -36,10 +37,11 @@ class AuthControllerTest {
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     @BeforeEach
     void setUp() {
-        users.deleteAll();
+        databaseCleaner.clean();
         users.save(new User("Anna", "Nowak", "anna@test.pl",
                 passwordEncoder.encode(PASSWORD), Role.STUDENT));
 

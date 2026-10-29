@@ -15,6 +15,7 @@ import pl.tokstudiow.api.TestcontainersConfiguration;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
 import pl.tokstudiow.api.user.UserRepository;
+import pl.tokstudiow.api.DatabaseCleaner;
 
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,12 +33,13 @@ class AdminUserControllerTest {
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     private User admin;
 
     @BeforeEach
     void setUp() {
-        users.deleteAll();
+        databaseCleaner.clean();
         admin = users.save(new User("Ada", "Admin", "admin@test.pl", passwordEncoder.encode(PASSWORD), Role.ADMIN));
         users.save(new User("Anna", "Nowak", "anna@test.pl", passwordEncoder.encode(PASSWORD), Role.STUDENT));
     }

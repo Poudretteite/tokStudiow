@@ -15,6 +15,7 @@ import pl.tokstudiow.api.TestcontainersConfiguration;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
 import pl.tokstudiow.api.user.UserRepository;
+import pl.tokstudiow.api.DatabaseCleaner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -34,10 +35,11 @@ class RefreshTokenFlowTest {
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     @BeforeEach
     void setUp() {
-        users.deleteAll();
+        databaseCleaner.clean();
         users.save(new User("Anna", "Nowak", EMAIL, passwordEncoder.encode(PASSWORD), Role.STUDENT));
     }
 
