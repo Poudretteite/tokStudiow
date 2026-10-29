@@ -3,19 +3,11 @@ package pl.tokstudiow.api.admin;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import pl.tokstudiow.api.TestcontainersConfiguration;
+import pl.tokstudiow.api.IntegrationTest;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
-import pl.tokstudiow.api.user.UserRepository;
-import pl.tokstudiow.api.DatabaseCleaner;
 
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,25 +15,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
-class AdminUserControllerTest {
-
-    private static final String PASSWORD = "Correct-Horse-Battery-1";
-
-    @Autowired MockMvc mvc;
-    @Autowired UserRepository users;
-    @Autowired PasswordEncoder passwordEncoder;
-    @Autowired DatabaseCleaner databaseCleaner;
+class AdminUserControllerTest extends IntegrationTest {
 
     private User admin;
 
     @BeforeEach
     void setUp() {
-        databaseCleaner.clean();
-        admin = users.save(new User("Ada", "Admin", "admin@test.pl", passwordEncoder.encode(PASSWORD), Role.ADMIN));
-        users.save(new User("Anna", "Nowak", "anna@test.pl", passwordEncoder.encode(PASSWORD), Role.STUDENT));
+        admin = createUser("Ada", "Admin", "admin@test.pl", Role.ADMIN);
+        createUser("Anna", "Nowak", "anna@test.pl", Role.STUDENT);
     }
 
     // kontrola dostępu
@@ -57,7 +38,7 @@ class AdminUserControllerTest {
 
         mvc.perform(get("/api/admin/users").header(AUTHORIZATION, bearer(token)))
                 .andExpect(status().isForbidden());
-        createUser(token, newUserJson("eve@test.pl", "ADMIN", PASSWORD))
+        createUserViaApi(token, newUserJson("eve@test.pl", "ADMIN", PASSWORD))
                 .andExpect(status().isForbidden());
     }
 
@@ -65,7 +46,7 @@ class AdminUserControllerTest {
 
     @Test
     void adminCanCreateUserWhoCanThenLogIn() throws Exception {
-        createUser(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "LECTURER", PASSWORD))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "LECTURER", PASSWORD))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andExpect(jsonPath("$.role").value("LECTURER"))
@@ -78,19 +59,19 @@ class AdminUserControllerTest {
 
     @Test
     void duplicateEmailIsRejectedRegardlessOfCase() throws Exception {
-        createUser(tokenFor("admin@test.pl"), newUserJson("ANNA@test.pl", "STUDENT", PASSWORD))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("ANNA@test.pl", "STUDENT", PASSWORD))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void shortPasswordIsRejected() throws Exception {
-        createUser(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "STUDENT", "short"))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "STUDENT", "short"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void unknownRoleIsRejected() throws Exception {
-        createUser(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "SUPERADMIN", PASSWORD))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "SUPERADMIN", PASSWORD))
                 .andExpect(status().isBadRequest());
     }
 
@@ -130,20 +111,7 @@ class AdminUserControllerTest {
 
     // pomocnicze
 
-    private ResultActions login(String email, String password) throws Exception {
-        return mvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"email": "%s", "password": "%s"}
-                        """.formatted(email, password)));
-    }
-
-    private String tokenFor(String email) throws Exception {
-        String json = login(email, PASSWORD).andReturn().getResponse().getContentAsString();
-        return JsonPath.read(json, "$.accessToken");
-    }
-
-    private ResultActions createUser(String token, String body) throws Exception {
+    private ResultActions createUserViaApi(String token, String body) throws Exception {
         return mvc.perform(post("/api/admin/users")
                 .header(AUTHORIZATION, bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -154,9 +122,5 @@ class AdminUserControllerTest {
         return """
                 {"firstName": "Jan", "lastName": "Kowalski", "email": "%s", "role": "%s", "password": "%s"}
                 """.formatted(email, role, password);
-    }
-
-    private static String bearer(String token) {
-        return "Bearer " + token;
     }
 }

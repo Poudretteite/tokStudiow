@@ -1,52 +1,27 @@
 package pl.tokstudiow.api.auth;
 
-import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
-import pl.tokstudiow.api.TestcontainersConfiguration;
+import pl.tokstudiow.api.IntegrationTest;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
-import pl.tokstudiow.api.user.UserRepository;
-import pl.tokstudiow.api.DatabaseCleaner;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
-class AuthControllerTest {
+class AuthControllerTest extends IntegrationTest {
 
-    private static final String PASSWORD = "Correct-Horse-Battery-1";
     private static final String GENERIC_ERROR = "Invalid email or password";
-
-    @Autowired MockMvc mvc;
-    @Autowired UserRepository users;
-    @Autowired PasswordEncoder passwordEncoder;
-    @Autowired DatabaseCleaner databaseCleaner;
 
     @BeforeEach
     void setUp() {
-        databaseCleaner.clean();
-        users.save(new User("Anna", "Nowak", "anna@test.pl",
-                passwordEncoder.encode(PASSWORD), Role.STUDENT));
-
-        User inactive = new User("Jan", "Kowalski", "jan@test.pl",
-                passwordEncoder.encode(PASSWORD), Role.STUDENT);
+        createUser("Anna", "Nowak", "anna@test.pl", Role.STUDENT);
+        User inactive = createUser("Jan", "Kowalski", "jan@test.pl", Role.STUDENT);
         inactive.deactivate();
         users.save(inactive);
     }
@@ -102,10 +77,10 @@ class AuthControllerTest {
 
     @Test
     void validTokenGivesAccessWithCorrectIdentity() throws Exception {
-        String token = obtainToken("anna@test.pl");
+        String token = tokenFor("anna@test.pl");
         String annaId = users.findByEmailIgnoreCase("anna@test.pl").orElseThrow().getId().toString();
 
-        mvc.perform(get("/api/auth/me").header(AUTHORIZATION, "Bearer " + token))
+        mvc.perform(get("/api/auth/me").header(AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(annaId))
                 .andExpect(jsonPath("$.role").value("STUDENT"));
@@ -113,7 +88,7 @@ class AuthControllerTest {
 
     @Test
     void tokenWithForgedRoleIsRejected() throws Exception {
-        String token = obtainToken("anna@test.pl");
+        String token = tokenFor("anna@test.pl");
         String[] parts = token.split("\\.");
 
         // Napastnik podmienia rolę w treści tokenu, zostawiając oryginalny podpis
@@ -124,23 +99,7 @@ class AuthControllerTest {
                 .encodeToString(forgedPayload.getBytes(StandardCharsets.UTF_8))
                 + "." + parts[2];
 
-        mvc.perform(get("/api/auth/me").header(AUTHORIZATION, "Bearer " + forgedToken))
+        mvc.perform(get("/api/auth/me").header(AUTHORIZATION, bearer(forgedToken)))
                 .andExpect(status().isUnauthorized());
-    }
-
-    // pomocnicze
-
-    private ResultActions login(String email, String password) throws Exception {
-        String body = """
-                {"email": "%s", "password": "%s"}
-                """.formatted(email, password);
-        return mvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body));
-    }
-
-    private String obtainToken(String email) throws Exception {
-        String response = login(email, PASSWORD).andReturn().getResponse().getContentAsString();
-        return JsonPath.read(response, "$.accessToken");
     }
 }
