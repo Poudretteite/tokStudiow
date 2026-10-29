@@ -22,6 +22,7 @@ public class DatabaseCleaner {
         transaction.executeWithoutResult(status -> {
             jdbc.execute("SET LOCAL session_replication_role = replica");
             jdbc.execute("TRUNCATE audit_log, refresh_tokens, users CASCADE");
+            jdbc.execute("TRUNCATE audit_log, refresh_tokens, users, faculties CASCADE");
         });
     }
 }
