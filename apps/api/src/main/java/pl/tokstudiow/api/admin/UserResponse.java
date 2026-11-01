@@ -1,5 +1,6 @@
 package pl.tokstudiow.api.admin;
 
+import org.jspecify.annotations.Nullable;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
 
@@ -13,9 +14,11 @@ public record UserResponse(
         String email,
         Role role,
         boolean active,
-        Instant createdAt
+        Instant createdAt,
+        @Nullable String albumNumber,
+        @Nullable UUID facultyId
 ) {
-    public static UserResponse from(User user) {
+    public static UserResponse from(User user, @Nullable String albumNumber, @Nullable UUID facultyId) {
         return new UserResponse(
                 user.getId(),
                 user.getFirstName(),
@@ -23,6 +26,8 @@ public record UserResponse(
                 user.getEmail(),
                 user.getRole(),
                 user.isActive(),
-                user.getCreatedAt());
+                user.getCreatedAt(),
+                albumNumber,
+                facultyId);
     }
 }
