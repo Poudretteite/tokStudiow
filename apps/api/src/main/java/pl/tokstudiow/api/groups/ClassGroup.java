@@ -65,7 +65,7 @@ public class ClassGroup {
     public short getGroupNumber() { return groupNumber; }
     public @Nullable Short getCapacity() { return capacity; }
 
-    UUID facultyId() {
+    public UUID facultyId() {
         return courseComponent.getCourse().getFieldOfStudy().getFaculty().getId();
     }
 
