@@ -46,10 +46,10 @@ class AdminUserControllerTest extends IntegrationTest {
 
     @Test
     void adminCanCreateUserWhoCanThenLogIn() throws Exception {
-        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "LECTURER", PASSWORD))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "ADMIN", PASSWORD))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.role").value("LECTURER"))
+                .andExpect(jsonPath("$.role").value("ADMIN"))
                 .andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.passwordHash").doesNotExist())
                 .andExpect(jsonPath("$.password").doesNotExist());

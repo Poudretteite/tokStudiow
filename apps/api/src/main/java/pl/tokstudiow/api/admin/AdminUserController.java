@@ -24,12 +24,12 @@ public class AdminUserController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@Valid @RequestBody CreateUserRequest request) {
-        return UserResponse.from(userManagement.create(request));
+        return userManagement.create(request);
     }
 
     @GetMapping
     public List<UserResponse> list() {
-        return userManagement.list().stream().map(UserResponse::from).toList();
+        return userManagement.list();
     }
 
     @PostMapping("/{id}/deactivate")

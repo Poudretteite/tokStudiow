@@ -39,7 +39,7 @@ class AuditLogTest extends IntegrationTest {
                 .andExpect(jsonPath("$[0].actorId").value(admin.getId().toString()))
                 .andExpect(jsonPath("$[0].oldValue").value(nullValue()))
                 .andExpect(jsonPath("$[0].newValue.email").value("jan@test.pl"))
-                .andExpect(jsonPath("$[0].newValue.role").value("LECTURER"));
+                .andExpect(jsonPath("$[0].newValue.role").value("ADMIN"));
 
         String rawEntry = jdbc.sql("SELECT CAST(new_value AS text) FROM audit_log WHERE entity_id = :id")
                 .param("id", UUID.fromString(janId))
@@ -96,7 +96,7 @@ class AuditLogTest extends IntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"firstName": "Jan", "lastName": "Kowalski", "email": "%s",
-                         "role": "LECTURER", "password": "%s"}
+                         "role": "ADMIN", "password": "%s"}
                         """.formatted(email, PASSWORD)));
     }
 }
