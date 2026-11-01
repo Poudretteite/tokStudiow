@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, TestFixtures.class})
 public abstract class IntegrationTest {
 
     protected static final String PASSWORD = "Correct-Horse-Battery-1";
@@ -35,6 +35,7 @@ public abstract class IntegrationTest {
     @Autowired protected PasswordEncoder passwordEncoder;
     @Autowired protected JdbcClient jdbc;
     @Autowired private DatabaseCleaner databaseCleaner;
+    @Autowired protected TestFixtures fixtures;
 
     @BeforeEach
     void cleanDatabase() {

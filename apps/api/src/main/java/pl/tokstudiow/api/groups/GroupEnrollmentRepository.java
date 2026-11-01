@@ -12,6 +12,7 @@ public interface GroupEnrollmentRepository extends JpaRepository<GroupEnrollment
     long countByClassGroupId(UUID classGroupId);
 
     boolean existsByClassGroupIdAndStudyId(UUID classGroupId, UUID studyId);
+    boolean existsByClassGroupIdAndStudyStudentUserId(UUID classGroupId, UUID studentId);
 
     @Query("""
             select count(e) > 0 from GroupEnrollment e
