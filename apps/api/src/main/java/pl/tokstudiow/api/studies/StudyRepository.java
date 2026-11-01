@@ -40,4 +40,10 @@ public interface StudyRepository extends JpaRepository<Study, UUID> {
             order by u.lastName, u.firstName, f.name
             """)
     List<Study> findForFaculty(@Param("facultyId") UUID facultyId);
+
+    @Query("""
+            select count(e) > 0 from GroupEnrollment e
+            where e.study.id = :studyId and e.classGroup.lecturer.userId = :lecturerId
+            """)
+    boolean isTaughtBy(@Param("studyId") UUID studyId, @Param("lecturerId") UUID lecturerId);
 }

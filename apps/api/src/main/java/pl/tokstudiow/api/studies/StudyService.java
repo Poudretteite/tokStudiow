@@ -69,7 +69,7 @@ public class StudyService {
             case ADMIN -> true;
             case STUDENT -> study.getStudent().getUserId().equals(CurrentUser.id());
             case DEAN_OFFICE -> study.facultyId().equals(myFacultyId());
-            case LECTURER -> false;
+            case LECTURER -> studies.isTaughtBy(study.getId(), CurrentUser.id());
         };
     }
 
