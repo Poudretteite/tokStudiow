@@ -64,8 +64,9 @@ public class TestFixtures {
     }
 
     public AcademicTerm term() {
-        return terms.save(new AcademicTerm("2026/2027 zimowy", TermType.WINTER,
-                LocalDate.of(2026, 10, 1), LocalDate.of(2027, 2, 20)));
+        LocalDate today = LocalDate.now();
+        return terms.save(new AcademicTerm("Semestr testowy", TermType.WINTER,
+                today.minusMonths(1), today.plusMonths(4)));
     }
 
     public User user(String firstName, String lastName, String email, Role role) {
