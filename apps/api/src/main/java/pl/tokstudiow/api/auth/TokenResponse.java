@@ -1,4 +1,10 @@
 package pl.tokstudiow.api.auth;
 
-public record TokenResponse(String accessToken, String refreshToken, String tokenType, long expiresIn) {
+import org.jspecify.annotations.Nullable;
+
+public record TokenResponse(String accessToken, @Nullable String refreshToken, String tokenType, long expiresIn) {
+
+    TokenResponse withoutRefreshToken() {
+        return new TokenResponse(accessToken, null, tokenType, expiresIn);
+    }
 }
