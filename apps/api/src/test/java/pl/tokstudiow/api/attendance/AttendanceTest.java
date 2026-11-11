@@ -13,6 +13,7 @@ import pl.tokstudiow.api.user.User;
 
 import java.time.LocalDate;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -124,7 +125,26 @@ class AttendanceTest extends IntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void groupAttendanceReturnsAllSessionsInOneRequest() throws Exception {
+        String earlier = idOf(createSession(lecturerToken, LAST_WEEK.minusWeeks(1), "10:15", "11:45"));
+        String later = idOf(createSession(lecturerToken, LAST_WEEK, "10:15", "11:45"));
+        record(lecturerToken, earlier, entry(anna, "PRESENT"), entry(jan, "ABSENT"));
+        record(lecturerToken, later, entry(anna, "LATE"));
+
+        groupAttendance(lecturerToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.sessionId == '%s')].status".formatted(later)).value("LATE"));
+    }
+
     // ataki
+
+    @Test
+    void otherLecturerAndStudentCannotReadGroupAttendance() throws Exception {
+        groupAttendance(otherLecturerToken).andExpect(status().isNotFound());
+        groupAttendance(annaToken).andExpect(status().isForbidden());
+    }
 
     @Test
     void otherLecturerCannotRecordAttendance() throws Exception {
@@ -170,6 +190,11 @@ class AttendanceTest extends IntegrationTest {
                 .content("""
                         {"entries": [%s]}
                         """.formatted(String.join(",", entries))));
+    }
+
+    private ResultActions groupAttendance(String token) throws Exception {
+        return mvc.perform(get("/api/lecturer/groups/{id}/attendance", group.getId())
+                .header(AUTHORIZATION, bearer(token)));
     }
 
     private static String entry(GroupEnrollment enrollment, String status) {

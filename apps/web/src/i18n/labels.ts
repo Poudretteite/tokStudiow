@@ -28,6 +28,14 @@ export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
     EXCUSED: 'Usprawiedliwiony',
 };
 
+/** Skróty w tabeli obecności – te same litery wpisuje się z klawiatury. */
+export const ATTENDANCE_SHORT: Record<AttendanceStatus, string> = {
+    PRESENT: 'O',
+    ABSENT: 'N',
+    LATE: 'S',
+    EXCUSED: 'U',
+};
+
 export const ATTENDANCE_CLASSES: Record<AttendanceStatus, string> = {
     PRESENT: 'text-green-700',
     ABSENT: 'text-red-700',

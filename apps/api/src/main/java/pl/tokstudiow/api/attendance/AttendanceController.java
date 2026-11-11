@@ -43,6 +43,12 @@ public class AttendanceController {
         return attendanceService.sessionAttendance(sessionId);
     }
 
+    @GetMapping("/api/lecturer/groups/{groupId}/attendance")
+    @PreAuthorize("hasRole('LECTURER')")
+    public List<GroupAttendanceResponse> groupAttendance(@PathVariable UUID groupId) {
+        return attendanceService.groupAttendance(groupId);
+    }
+
     @GetMapping("/api/me/groups/{groupId}/attendance")
     @PreAuthorize("hasRole('STUDENT')")
     public List<MyAttendanceResponse> myAttendance(@PathVariable UUID groupId) {

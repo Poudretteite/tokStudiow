@@ -22,6 +22,8 @@ const MESSAGES: Record<string, string> = {
     'Each student may appear only once in the request': 'Każdy student może wystąpić w zapisie tylko raz.',
     'Final grade is already settled': 'Ten student ma już rozliczoną ocenę końcową.',
     'Data was changed in the meantime': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
+    'Session not found': 'Nie znaleziono zajęć.',
+    'Cannot record attendance for a cancelled session': 'Nie można wpisać obecności na odwołanych zajęciach.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 
