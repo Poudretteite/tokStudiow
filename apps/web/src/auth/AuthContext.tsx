@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, refreshAccessToken, setAccessToken } from '../api/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { api, refreshAccessToken, setAccessToken, setSessionExpiredHandler } from '../api/client';
 import type { Me } from '../api/types';
 
 interface AuthState {
@@ -14,6 +15,17 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<Me | null>(null);
     const [loading, setLoading] = useState(true);
+
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        setSessionExpiredHandler(() => {
+            setAccessToken(null);
+            setUser(null);
+            queryClient.clear();
+        });
+        return () => setSessionExpiredHandler(null);
+    }, [queryClient]);
 
     // Po otwarciu lub odświeżeniu strony: spróbuj odtworzyć sesję z ciasteczka
     useEffect(() => {
@@ -46,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Client': 'web' } });
         setAccessToken(null);
         setUser(null);
-    }, []);
+        queryClient.clear();
+    }, [queryClient]);
 
     const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

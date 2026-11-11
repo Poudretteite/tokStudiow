@@ -4,6 +4,11 @@
  * Refresh token jest w ciasteczku HttpOnly, niewidocznym dla JavaScriptu.
  */
 let accessToken: string | null = null;
+let onSessionExpired: (() => void) | null = null;
+
+export function setSessionExpiredHandler(handler: (() => void) | null) {
+    onSessionExpired = handler;
+}
 let refreshInFlight: Promise<boolean> | null = null;
 
 export class ApiError extends Error {
@@ -60,8 +65,13 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
     const response = await fetch(path, { ...init, headers });
 
     // Token dostępu wygasł (15 min) – odśwież raz i powtórz żądanie
-    if (response.status === 401 && retry && (await refreshAccessToken())) {
-        return api<T>(path, init, false);
+    if (response.status === 401) {
+        // Token dostępu wygasł (15 min) – odśwież raz i powtórz żądanie
+        if (retry && (await refreshAccessToken())) {
+            return api<T>(path, init, false);
+        }
+        // Sesji nie da się odnowić – wyloguj w interfejsie
+        onSessionExpired?.();
     }
     if (!response.ok) {
         throw new ApiError(response.status, await errorDetail(response));
