@@ -1,5 +1,6 @@
 package pl.tokstudiow.api.grades;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.tokstudiow.api.audit.AuditAction;
@@ -14,6 +15,7 @@ import pl.tokstudiow.api.groups.GroupEnrollmentRepository;
 import pl.tokstudiow.api.studies.StudyRepository;
 import pl.tokstudiow.api.university.GradeValue;
 import pl.tokstudiow.api.university.GradeValueRepository;
+import pl.tokstudiow.api.university.GradingScale;
 import pl.tokstudiow.api.university.GradingScaleType;
 import pl.tokstudiow.api.user.UserRepository;
 
@@ -58,7 +60,7 @@ public class FinalGradeService {
         this.audit = audit;
     }
 
-    // prowadzący: szkic
+    // ---------- prowadzący: szkic ----------
 
     @Transactional
     public FinalGradeResponse saveDraft(UUID groupId, FinalGradeRequest request) {
@@ -87,7 +89,7 @@ public class FinalGradeService {
         return FinalGradeResponse.from(grade);
     }
 
-    // prowadzący: zatwierdzenie
+    // ---------- prowadzący: zatwierdzenie ----------
 
     @Transactional
     public FinalGradeResponse approve(UUID groupId, UUID finalGradeId) {
@@ -108,33 +110,44 @@ public class FinalGradeService {
         return finalGrades.findForGroup(groupId).stream().map(FinalGradeResponse::from).toList();
     }
 
-    // prowadzący: propozycja oceny
+    // ---------- prowadzący: propozycja oceny ----------
 
+    /**
+     * Propozycja oceny końcowej na podstawie ostatnich prób z każdego elementu zaliczenia.
+     * Elementy „na ocenę” tworzą średnią ważoną (wagi muszą dawać 100%),
+     * elementy zal/nzal są warunkiem zaliczenia: niezaliczony daje propozycję oceny niedostatecznej.
+     * Brak oceny z któregokolwiek elementu = brak propozycji.
+     */
     @Transactional(readOnly = true)
     public List<FinalGradeProposalResponse> proposals(UUID groupId) {
         ClassGroup group = myGroup(groupId);
-        var scale = group.getCourseComponent().getGradingScale();
-        List<AssessmentItem> groupItems = items.findByClassGroupIdOrderByOrderIndex(groupId);
-        BigDecimal totalWeight = groupItems.stream()
+        GradingScale componentScale = group.getCourseComponent().getGradingScale();
+        List<AssessmentItem> allItems = items.findByClassGroupIdOrderByOrderIndex(groupId);
+        List<AssessmentItem> gradedItems = allItems.stream()
+                .filter(i -> i.getGradingScale().getType() == GradingScaleType.NUMERIC)
+                .toList();
+        BigDecimal gradedWeight = gradedItems.stream()
                 .map(AssessmentItem::getWeightPercent)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        boolean computable = scale.getType() == GradingScaleType.NUMERIC
-                && !groupItems.isEmpty()
-                && totalWeight.compareTo(HUNDRED) == 0;
 
-        // ostatnia próba z każdego elementu: klucz = zapis + element
+        boolean computable = !allItems.isEmpty()
+                && (gradedItems.isEmpty() || gradedWeight.compareTo(HUNDRED) == 0)
+                // na ocenę końcową liczbową potrzebny jest co najmniej jeden element „na ocenę”
+                && (componentScale.getType() == GradingScaleType.PASS_FAIL || !gradedItems.isEmpty());
+
         Map<String, PartialGrade> latest = new HashMap<>();
         for (PartialGrade grade : partialGrades.findForGroup(groupId)) {
-            latest.put(grade.getGroupEnrollment().getId() + ":" + grade.getAssessmentItem().getId(), grade);
+            latest.put(key(grade.getGroupEnrollment(), grade.getAssessmentItem()), grade);
         }
-        List<GradeValue> scaleValues = scale.getValues().stream()
+        List<GradeValue> numericValues = componentScale.getValues().stream()
                 .filter(v -> v.getNumericValue() != null)
                 .sorted(Comparator.comparing(GradeValue::getNumericValue))
                 .toList();
 
         return enrollments.findRoster(groupId).stream().map(enrollment -> {
-            BigDecimal average = computable ? weightedAverage(enrollment, groupItems, latest) : null;
-            GradeValue proposed = average == null ? null : nearest(average, scaleValues);
+            Proposal proposal = computable
+                    ? propose(enrollment, allItems, gradedItems, latest, componentScale, numericValues)
+                    : Proposal.NONE;
             var student = enrollment.getStudy().getStudent();
             return new FinalGradeProposalResponse(
                     enrollment.getId(),
@@ -142,22 +155,51 @@ public class FinalGradeService {
                     student.getUser().getFirstName(),
                     student.getUser().getLastName(),
                     student.getAlbumNumber(),
-                    average,
-                    proposed == null ? null : proposed.getId(),
-                    proposed == null ? null : proposed.getLabel());
+                    proposal.average(),
+                    proposal.value() == null ? null : proposal.value().getId(),
+                    proposal.value() == null ? null : proposal.value().getLabel());
         }).toList();
     }
 
-    /** Średnia ważona; null, jeśli student nie ma oceny z któregoś elementu. */
-    private static BigDecimal weightedAverage(GroupEnrollment enrollment, List<AssessmentItem> groupItems,
+    private record Proposal(@Nullable BigDecimal average, @Nullable GradeValue value) {
+        static final Proposal NONE = new Proposal(null, null);
+    }
+
+    private static Proposal propose(GroupEnrollment enrollment,
+                                    List<AssessmentItem> allItems,
+                                    List<AssessmentItem> gradedItems,
+                                    Map<String, PartialGrade> latest,
+                                    GradingScale componentScale,
+                                    List<GradeValue> numericValues) {
+        for (AssessmentItem item : allItems) {
+            if (!latest.containsKey(key(enrollment, item))) {
+                return Proposal.NONE;
+            }
+        }
+        BigDecimal average = gradedItems.isEmpty() ? null : weightedAverage(enrollment, gradedItems, latest);
+
+        if (componentScale.getType() == GradingScaleType.PASS_FAIL) {
+            boolean allPassed = allItems.stream()
+                    .allMatch(item -> latest.get(key(enrollment, item)).getGradeValue().isPassing());
+            return new Proposal(average, passFailValue(componentScale, allPassed));
+        }
+
+        boolean requirementsMet = allItems.stream()
+                .filter(item -> item.getGradingScale().getType() == GradingScaleType.PASS_FAIL)
+                .allMatch(item -> latest.get(key(enrollment, item)).getGradeValue().isPassing());
+        if (!requirementsMet) {
+            return new Proposal(average, lowestFailing(numericValues));
+        }
+        return new Proposal(average, nearest(average, numericValues));
+    }
+
+    /** Średnia ważona z elementów „na ocenę”. */
+    private static BigDecimal weightedAverage(GroupEnrollment enrollment, List<AssessmentItem> gradedItems,
                                               Map<String, PartialGrade> latest) {
         BigDecimal sum = BigDecimal.ZERO;
-        for (AssessmentItem item : groupItems) {
-            PartialGrade grade = latest.get(enrollment.getId() + ":" + item.getId());
-            if (grade == null || grade.getGradeValue().getNumericValue() == null) {
-                return null;
-            }
-            sum = sum.add(item.getWeightPercent().multiply(grade.getGradeValue().getNumericValue()));
+        for (AssessmentItem item : gradedItems) {
+            BigDecimal value = latest.get(key(enrollment, item)).getGradeValue().getNumericValue();
+            sum = sum.add(item.getWeightPercent().multiply(value));
         }
         return sum.divide(HUNDRED, 2, RoundingMode.HALF_UP);
     }
@@ -175,7 +217,19 @@ public class FinalGradeService {
         return best;
     }
 
-    // student: indeks
+    private static GradeValue lowestFailing(List<GradeValue> ascendingValues) {
+        return ascendingValues.stream().filter(v -> !v.isPassing()).findFirst().orElse(ascendingValues.getFirst());
+    }
+
+    private static GradeValue passFailValue(GradingScale scale, boolean passed) {
+        return scale.getValues().stream().filter(v -> v.isPassing() == passed).findFirst().orElseThrow();
+    }
+
+    private static String key(GroupEnrollment enrollment, AssessmentItem item) {
+        return enrollment.getId() + ":" + item.getId();
+    }
+
+    // ---------- student: indeks ----------
 
     @Transactional(readOnly = true)
     public List<StudyTranscriptResponse> myTranscript() {
@@ -211,7 +265,7 @@ public class FinalGradeService {
                 value.getLabel(), value.getNumericValue(), value.isPassing(), grade.getApprovedAt());
     }
 
-    // pomocnicze
+    // ---------- pomocnicze ----------
 
     private ClassGroup myGroup(UUID groupId) {
         return groups.findDetailed(groupId)

@@ -94,7 +94,8 @@ class ClassGroupTest extends IntegrationTest {
         createGroup(deanToken, 1, 20)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.courseCode").value("INF-BD"))
-                .andExpect(jsonPath("$.lecturerId").value(lecturerId));
+                .andExpect(jsonPath("$.lecturerId").value(lecturerId))
+                .andExpect(jsonPath("$.gradingScaleId").isNotEmpty());
     }
 
     @Test

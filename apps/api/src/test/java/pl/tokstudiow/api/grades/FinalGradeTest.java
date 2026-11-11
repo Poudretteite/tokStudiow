@@ -218,4 +218,37 @@ class FinalGradeTest extends IntegrationTest {
     private String numeric(String label) {
         return fixtures.gradeValue(GradingScaleType.NUMERIC, label).getId().toString();
     }
+
+    @Test
+    void failedPassFailRequirementProposesFailingGrade() throws Exception {
+        String quiz = addItem("Kolokwium", "100");
+        String reports = idOf(mvc.perform(post("/api/lecturer/groups/{id}/assessment-items", group.getId())
+                .header(AUTHORIZATION, bearer(lecturerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "Sprawozdania", "gradingType": "PASS_FAIL"}
+                        """)));
+        String zal = fixtures.gradeValue(GradingScaleType.PASS_FAIL, "zal").getId().toString();
+        String nzal = fixtures.gradeValue(GradingScaleType.PASS_FAIL, "nzal").getId().toString();
+
+        issuePartial(anna, quiz, "5,0");
+        issuePartialValue(anna, reports, nzal);   // świetne kolokwium, ale brak sprawozdań → 2,0
+        issuePartial(jan, quiz, "4,0");
+        issuePartialValue(jan, reports, zal);     // warunek spełniony → propozycja ze średniej
+
+        mvc.perform(get("/api/lecturer/groups/{id}/final-grade-proposals", group.getId())
+                        .header(AUTHORIZATION, bearer(lecturerToken)))
+                .andExpect(jsonPath("$[?(@.albumNumber == '1001')].proposedGradeLabel").value("2,0"))
+                .andExpect(jsonPath("$[?(@.albumNumber == '1002')].proposedGradeLabel").value("4,0"));
+    }
+
+    private void issuePartialValue(GroupEnrollment enrollment, String itemId, String gradeValueId) throws Exception {
+        mvc.perform(post("/api/lecturer/groups/{id}/partial-grades", group.getId())
+                        .header(AUTHORIZATION, bearer(lecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"enrollmentId": "%s", "assessmentItemId": "%s", "gradeValueId": "%s"}
+                                """.formatted(enrollment.getId(), itemId, gradeValueId)))
+                .andExpect(status().isCreated());
+    }
 }

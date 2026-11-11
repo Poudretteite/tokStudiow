@@ -10,7 +10,10 @@ const NAVIGATION: Record<Role, { label: string; to: string }[]> = {
         { label: 'Moje zajęcia', to: '/groups' },
         { label: 'Indeks', to: '/transcript' },
     ],
-    LECTURER: [{ label: 'Strona główna', to: '/' }],
+    LECTURER: [
+        { label: 'Strona główna', to: '/' },
+        { label: 'Moje grupy', to: '/teaching' },
+    ],
     DEAN_OFFICE: [{ label: 'Strona główna', to: '/' }],
     ADMIN: [{ label: 'Strona główna', to: '/' }],
 };

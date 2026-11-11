@@ -62,6 +62,10 @@ public class PartialGrade {
         this.issuedAt = Instant.now();
     }
 
+    void correct(GradeValue newValue) {
+        this.gradeValue = newValue;
+    }
+
     public UUID getId() { return id; }
     public GroupEnrollment getGroupEnrollment() { return groupEnrollment; }
     public AssessmentItem getAssessmentItem() { return assessmentItem; }

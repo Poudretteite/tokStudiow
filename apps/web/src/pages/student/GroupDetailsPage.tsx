@@ -114,7 +114,7 @@ function GradesTable({ items, grades }: { items: AssessmentItem[]; grades: Parti
                     return (
                         <Tr key={item.id}>
                             <Td>{item.name}</Td>
-                            <Td>{item.weightPercent}%</Td>
+                            <Td>{item.gradingType === 'PASS_FAIL' ? 'zal/nzal' : `${item.weightPercent}%`}</Td>
                             <Td>
                                 {current ? (
                                     <>

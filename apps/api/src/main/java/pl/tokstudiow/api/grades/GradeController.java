@@ -17,10 +17,13 @@ public class GradeController {
         this.gradeService = gradeService;
     }
 
+    // elementy zaliczenia
+
     @PostMapping("/api/lecturer/groups/{groupId}/assessment-items")
     @PreAuthorize("hasRole('LECTURER')")
     @ResponseStatus(HttpStatus.CREATED)
-    public AssessmentItemResponse addItem(@PathVariable UUID groupId, @Valid @RequestBody AssessmentItemRequest request) {
+    public AssessmentItemResponse addItem(@PathVariable UUID groupId,
+                                          @Valid @RequestBody AssessmentItemRequest request) {
         return gradeService.addItem(groupId, request);
     }
 
@@ -29,11 +32,30 @@ public class GradeController {
         return gradeService.listItems(groupId);
     }
 
+    // oceny cząstkowe: prowadzący
+
     @PostMapping("/api/lecturer/groups/{groupId}/partial-grades")
     @PreAuthorize("hasRole('LECTURER')")
     @ResponseStatus(HttpStatus.CREATED)
-    public PartialGradeResponse issue(@PathVariable UUID groupId, @Valid @RequestBody PartialGradeRequest request) {
+    public PartialGradeResponse issue(@PathVariable UUID groupId,
+                                      @Valid @RequestBody PartialGradeRequest request) {
         return gradeService.issue(groupId, request);
+    }
+
+    @PostMapping("/api/lecturer/groups/{groupId}/partial-grades/batch")
+    @PreAuthorize("hasRole('LECTURER')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<PartialGradeResponse> issueBatch(@PathVariable UUID groupId,
+                                                 @Valid @RequestBody PartialGradeBatchRequest request) {
+        return gradeService.issueBatch(groupId, request);
+    }
+
+    @PatchMapping("/api/lecturer/groups/{groupId}/partial-grades/{gradeId}")
+    @PreAuthorize("hasRole('LECTURER')")
+    public PartialGradeResponse correct(@PathVariable UUID groupId,
+                                        @PathVariable UUID gradeId,
+                                        @Valid @RequestBody CorrectGradeRequest request) {
+        return gradeService.correct(groupId, gradeId, request);
     }
 
     @GetMapping("/api/lecturer/groups/{groupId}/partial-grades")
@@ -41,6 +63,8 @@ public class GradeController {
     public List<PartialGradeResponse> gradebook(@PathVariable UUID groupId) {
         return gradeService.gradebook(groupId);
     }
+
+    // oceny cząstkowe: student
 
     @GetMapping("/api/me/groups/{groupId}/partial-grades")
     @PreAuthorize("hasRole('STUDENT')")
