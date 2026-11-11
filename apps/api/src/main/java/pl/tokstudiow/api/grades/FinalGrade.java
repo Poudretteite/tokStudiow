@@ -43,6 +43,11 @@ public class FinalGrade {
     @Column(name = "approved_at")
     private @Nullable Instant approvedAt;
 
+    /** Optimistic locking: dwa równoczesne zapisy tej samej oceny nie nadpiszą się po cichu. */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

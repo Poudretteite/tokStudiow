@@ -19,6 +19,10 @@ const MESSAGES: Record<string, string> = {
     'Graded assessment items need a weight greater than 0': 'Element na ocenę musi mieć wagę większą od 0.',
     'Grade value does not belong to the grading scale of this assessment item':
         'Ta ocena nie pasuje do sposobu oceniania tego elementu.',
+    'Each student may appear only once in the request': 'Każdy student może wystąpić w zapisie tylko raz.',
+    'Final grade is already settled': 'Ten student ma już rozliczoną ocenę końcową.',
+    'Data was changed in the meantime': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
+    'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 
 /** Komunikat dla użytkownika: znany błąd po polsku, inne – ogólny opis bez szczegółów technicznych. */

@@ -15,4 +15,13 @@ public enum FinalAttempt {
             case COMMISSION -> SECOND;
         };
     }
+
+    /** Kolejny termin po niezaliczonym; po komisji nie ma już następnego. */
+    @Nullable FinalAttempt next() {
+        return switch (this) {
+            case FIRST -> SECOND;
+            case SECOND -> COMMISSION;
+            case COMMISSION -> null;
+        };
+    }
 }

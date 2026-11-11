@@ -116,3 +116,36 @@ export interface GradingScale {
     type: 'NUMERIC' | 'PASS_FAIL';
     values: GradeValue[];
 }
+
+export type FinalGradeStatus = 'DRAFT' | 'APPROVED';
+
+export interface FinalGrade {
+    id: string;
+    enrollmentId: string;
+    studentId: string;
+    studentFirstName: string;
+    studentLastName: string;
+    albumNumber: string;
+    attempt: FinalAttempt;
+    status: FinalGradeStatus;
+    gradeLabel: string;
+    numericValue: number | null;
+    passing: boolean;
+    approvedBy: string | null;
+    approvedAt: string | null;
+}
+
+/** Wiersz arkusza ocen końcowych; openAttempt = null oznacza rozliczony przedmiot. */
+export interface FinalGradeSheetRow {
+    enrollmentId: string;
+    studentId: string;
+    studentFirstName: string;
+    studentLastName: string;
+    albumNumber: string;
+    weightedAverage: number | null;
+    proposedGradeValueId: string | null;
+    proposedGradeLabel: string | null;
+    grades: FinalGrade[];
+    openAttempt: FinalAttempt | null;
+    draftGradeValueId: string | null;
+}
