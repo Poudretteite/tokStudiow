@@ -3,7 +3,9 @@ import { useParams } from 'react-router';
 import { api } from '../../api/client';
 import type { ClassGroup } from '../../api/types';
 import { PageHeader } from '../../components/PageHeader';
+import { Tabs } from '../../components/ui/Tabs';
 import { COMPONENT_LABELS } from '../../i18n/labels';
+import { FinalGrades } from './FinalGrades';
 import { Gradebook } from './Gradebook';
 
 export function LecturerGroupPage() {
@@ -20,7 +22,15 @@ export function LecturerGroupPage() {
     return (
         <>
             <PageHeader title={title} crumbs={[{ label: 'Moje grupy', to: '/teaching' }, { label: title }]} />
-            {group && <Gradebook group={group} />}
+            {group && (
+                <Tabs
+                    label="Prowadzenie grupy"
+                    tabs={[
+                        { id: 'partial', label: 'Oceny cząstkowe', content: <Gradebook group={group} /> },
+                        { id: 'final', label: 'Oceny końcowe', content: <FinalGrades group={group} /> },
+                    ]}
+                />
+            )}
         </>
     );
 }

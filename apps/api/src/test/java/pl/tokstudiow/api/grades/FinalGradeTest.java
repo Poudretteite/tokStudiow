@@ -12,6 +12,7 @@ import pl.tokstudiow.api.university.*;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -136,6 +137,94 @@ class FinalGradeTest extends IntegrationTest {
                 .andExpect(jsonPath("$[?(@.albumNumber == '1002')].proposedGradeLabel", contains(nullValue())));
     }
 
+    // arkusz i zatwierdzanie całej grupy
+
+    @Test
+    void sheetShowsProposalAndAttemptToApprove() throws Exception {
+        String quiz = addItem("Kolokwium", "100");
+        issuePartial(anna, quiz, "4,0");     // Jan bez oceny → brak propozycji
+
+        sheet()
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.albumNumber == '1001')].proposedGradeLabel").value("4,0"))
+                .andExpect(jsonPath("$[?(@.albumNumber == '1001')].openAttempt").value("FIRST"))
+                .andExpect(jsonPath("$[?(@.albumNumber == '1001')].grades[*]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.albumNumber == '1002')].proposedGradeLabel", contains(nullValue())));
+    }
+
+    @Test
+    void batchApprovalApprovesWholeGroupAtOnce() throws Exception {
+        approveBatch(entry(anna, "4,0"), entry(jan, "2,0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].status", contains("APPROVED", "APPROVED")))
+                .andExpect(jsonPath("$[*].attempt", contains("FIRST", "FIRST")));
+
+        transcript(annaToken).andExpect(jsonPath("$[0].entries[0].gradeLabel").value("4,0"));
+        sheet()
+                .andExpect(jsonPath("$[?(@.albumNumber == '1001')].openAttempt", contains(nullValue())))
+                .andExpect(jsonPath("$[?(@.albumNumber == '1002')].openAttempt").value("SECOND"));
+    }
+
+    @Test
+    void batchApprovalUsesExistingDraftAndNextAttemptAfterFailure() throws Exception {
+        String draftId = idOf(saveDraft(anna, "FIRST", "3,0"));
+        approve(idOf(saveDraft(jan, "FIRST", "2,0")));
+
+        approveBatch(entry(anna, "3,5"), entry(jan, "3,0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(draftId))
+                .andExpect(jsonPath("$[0].gradeLabel").value("3,5"))
+                .andExpect(jsonPath("$[1].attempt").value("SECOND"));
+    }
+
+    @Test
+    void settledGradeCannotBeApprovedAgain() throws Exception {
+        approveBatch(entry(anna, "4,0"));
+
+        approveBatch(entry(anna, "5,0")).andExpect(status().isConflict());
+    }
+
+    @Test
+    void batchApprovalIsAtomic() throws Exception {
+        String zal = fixtures.gradeValue(GradingScaleType.PASS_FAIL, "zal").getId().toString();
+
+        // ocena spoza skali laboratorium u Jana wycofuje także poprawny wpis Anny
+        approveBatch(entry(anna, "4,0"), """
+                {"enrollmentId": "%s", "gradeValueId": "%s"}""".formatted(jan.getId(), zal))
+                .andExpect(status().isBadRequest());
+
+        sheet().andExpect(jsonPath("$[?(@.albumNumber == '1001')].grades[*]", hasSize(0)));
+    }
+
+    @Test
+    void batchApprovalRejectsDuplicateStudent() throws Exception {
+        approveBatch(entry(anna, "4,0"), entry(anna, "5,0")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void batchApprovalIsAuditedOncePerStudent() throws Exception {
+        String id = JsonPath.read(approveBatch(entry(anna, "4,5"))
+                .andReturn().getResponse().getContentAsString(), "$[0].id");
+
+        createUser("Ada", "Admin", "admin@test.pl", Role.ADMIN);
+        auditHistory("final_grade", id, tokenFor("admin@test.pl"))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].action").value("CREATE"))
+                .andExpect(jsonPath("$[0].actorId").value(lecturerId))
+                .andExpect(jsonPath("$[0].newValue.status").value("APPROVED"))
+                .andExpect(jsonPath("$[0].newValue.approvedBy").value(lecturerId));
+    }
+
+    @Test
+    void otherLecturerAndStudentCannotUseSheetOrBatchApproval() throws Exception {
+        approveBatchAs(otherLecturerToken, entry(anna, "5,0")).andExpect(status().isNotFound());
+        approveBatchAs(annaToken, entry(anna, "5,0")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/lecturer/groups/{id}/final-grade-sheet", group.getId())
+                        .header(AUTHORIZATION, bearer(otherLecturerToken)))
+                .andExpect(status().isNotFound());
+    }
+
     // ataki
 
     @Test
@@ -190,6 +279,27 @@ class FinalGradeTest extends IntegrationTest {
     private ResultActions approve(String finalGradeId) throws Exception {
         return mvc.perform(post("/api/lecturer/groups/{g}/final-grades/{id}/approve", group.getId(), finalGradeId)
                 .header(AUTHORIZATION, bearer(lecturerToken)));
+    }
+
+    private ResultActions sheet() throws Exception {
+        return mvc.perform(get("/api/lecturer/groups/{id}/final-grade-sheet", group.getId())
+                .header(AUTHORIZATION, bearer(lecturerToken)));
+    }
+
+    private String entry(GroupEnrollment enrollment, String label) {
+        return """
+                {"enrollmentId": "%s", "gradeValueId": "%s"}""".formatted(enrollment.getId(), numeric(label));
+    }
+
+    private ResultActions approveBatch(String... entries) throws Exception {
+        return approveBatchAs(lecturerToken, entries);
+    }
+
+    private ResultActions approveBatchAs(String token, String... entries) throws Exception {
+        return mvc.perform(post("/api/lecturer/groups/{id}/final-grades/approvals", group.getId())
+                .header(AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"entries\": [" + String.join(", ", entries) + "]}"));
     }
 
     private ResultActions transcript(String token) throws Exception {

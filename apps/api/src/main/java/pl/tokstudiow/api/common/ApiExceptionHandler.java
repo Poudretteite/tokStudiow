@@ -1,6 +1,7 @@
 package pl.tokstudiow.api.common;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,5 +28,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity() {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Data conflict");
+    }
+
+    /** Ktoś zmienił te same dane w międzyczasie (np. równoczesne zatwierdzenie oceny). */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail handleConcurrentModification() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Data was changed in the meantime");
     }
 }

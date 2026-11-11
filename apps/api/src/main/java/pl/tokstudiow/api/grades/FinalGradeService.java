@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import pl.tokstudiow.api.audit.AuditAction;
 import pl.tokstudiow.api.audit.AuditService;
 import pl.tokstudiow.api.common.BusinessRuleException;
+import pl.tokstudiow.api.common.ConflictException;
 import pl.tokstudiow.api.common.CurrentUser;
 import pl.tokstudiow.api.common.NotFoundException;
 import pl.tokstudiow.api.groups.ClassGroup;
@@ -17,11 +18,13 @@ import pl.tokstudiow.api.university.GradeValue;
 import pl.tokstudiow.api.university.GradeValueRepository;
 import pl.tokstudiow.api.university.GradingScale;
 import pl.tokstudiow.api.university.GradingScaleType;
+import pl.tokstudiow.api.user.User;
 import pl.tokstudiow.api.user.UserRepository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,7 +63,7 @@ public class FinalGradeService {
         this.audit = audit;
     }
 
-    // ---------- prowadzący: szkic ----------
+    // prowadzący: szkic
 
     @Transactional
     public FinalGradeResponse saveDraft(UUID groupId, FinalGradeRequest request) {
@@ -89,7 +92,7 @@ public class FinalGradeService {
         return FinalGradeResponse.from(grade);
     }
 
-    // ---------- prowadzący: zatwierdzenie ----------
+    // prowadzący: zatwierdzenie
 
     @Transactional
     public FinalGradeResponse approve(UUID groupId, UUID finalGradeId) {
@@ -110,7 +113,126 @@ public class FinalGradeService {
         return finalGrades.findForGroup(groupId).stream().map(FinalGradeResponse::from).toList();
     }
 
-    // ---------- prowadzący: propozycja oceny ----------
+    // prowadzący: arkusz ocen końcowych
+
+    /**
+     * Arkusz całej grupy: propozycja, dotychczasowe terminy i termin, którego dotyczy
+     * zatwierdzenie. Frontend wpisuje propozycję jako ocenę, prowadzący zmienia tylko wyjątki.
+     */
+    @Transactional(readOnly = true)
+    public List<FinalGradeSheetRowResponse> sheet(UUID groupId) {
+        ClassGroup group = myGroup(groupId);
+        List<GroupEnrollment> roster = enrollments.findRoster(groupId);
+        Map<UUID, Proposal> proposalsByEnrollment = proposalsFor(group, roster);
+        Map<UUID, List<FinalGrade>> gradesByEnrollment = gradesByEnrollment(groupId);
+
+        return roster.stream().map(enrollment -> {
+            Proposal proposal = proposalsByEnrollment.get(enrollment.getId());
+            List<FinalGrade> attempts = gradesByEnrollment.getOrDefault(enrollment.getId(), List.of());
+            var student = enrollment.getStudy().getStudent();
+            return new FinalGradeSheetRowResponse(
+                    enrollment.getId(),
+                    student.getUserId(),
+                    student.getUser().getFirstName(),
+                    student.getUser().getLastName(),
+                    student.getAlbumNumber(),
+                    proposal.average(),
+                    proposal.value() == null ? null : proposal.value().getId(),
+                    proposal.value() == null ? null : proposal.value().getLabel(),
+                    attempts.stream().map(FinalGradeResponse::from).toList(),
+                    openAttempt(attempts),
+                    attempts.stream()
+                            .filter(g -> !g.isApproved())
+                            .findFirst()
+                            .map(g -> g.getGradeValue().getId())
+                            .orElse(null));
+        }).toList();
+    }
+
+    /**
+     * Zatwierdza oceny końcowe wielu studentów jednym żądaniem, atomowo: błąd w jednym
+     * wpisie wycofuje całość. Termin wybiera system (I termin, poprawka po niezaliczonym,
+     * komisja), więc prowadzący nie może np. wpisać poprawki osobie, która zdała.
+     */
+    @Transactional
+    public List<FinalGradeResponse> approveBatch(UUID groupId, FinalGradeBatchRequest request) {
+        // Blokada grupy: dwa równoczesne zatwierdzenia nie utworzą dwóch ocen za ten sam termin
+        ClassGroup group = groups.findByIdForUpdate(groupId)
+                .filter(g -> g.getLecturer().getUserId().equals(CurrentUser.id()))
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        Set<UUID> seen = new HashSet<>();
+        for (BatchGradeEntry entry : request.entries()) {
+            if (!seen.add(entry.enrollmentId())) {
+                throw new BusinessRuleException("Each student may appear only once in the request");
+            }
+        }
+
+        Map<UUID, GroupEnrollment> roster = enrollments.findRoster(groupId).stream()
+                .collect(Collectors.toMap(GroupEnrollment::getId, Function.identity()));
+        Map<UUID, GradeValue> scaleValues = group.getCourseComponent().getGradingScale().getValues().stream()
+                .collect(Collectors.toMap(GradeValue::getId, Function.identity()));
+        Map<UUID, List<FinalGrade>> gradesByEnrollment = gradesByEnrollment(groupId);
+        User approver = users.getReferenceById(CurrentUser.id());
+
+        List<FinalGradeResponse> approved = new ArrayList<>();
+        for (BatchGradeEntry entry : request.entries()) {
+            GroupEnrollment enrollment = roster.get(entry.enrollmentId());
+            if (enrollment == null) {
+                throw new NotFoundException("Enrollment not found");
+            }
+            GradeValue value = scaleValues.get(entry.gradeValueId());
+            if (value == null) {
+                throw new BusinessRuleException("Grade value does not belong to the grading scale of this course component");
+            }
+            List<FinalGrade> attempts = gradesByEnrollment.getOrDefault(enrollment.getId(), List.of());
+            FinalAttempt attempt = openAttempt(attempts);
+            if (attempt == null) {
+                throw new ConflictException("Final grade is already settled");
+            }
+
+            Optional<FinalGrade> draft = attempts.stream().filter(g -> g.getAttempt() == attempt).findFirst();
+            FinalGrade grade;
+            if (draft.isPresent()) {
+                grade = draft.get();
+                Map<String, Object> before = snapshot(grade);
+                grade.changeValue(value);
+                grade.approve(approver);
+                audit.record(AUDIT_ENTITY, grade.getId(), AuditAction.UPDATE, before, snapshot(grade));
+            } else {
+                // od razu jako zatwierdzona: jeden INSERT i jeden wpis w audycie
+                FinalGrade fresh = new FinalGrade(enrollment, attempt, value);
+                fresh.approve(approver);
+                grade = finalGrades.save(fresh);
+                audit.record(AUDIT_ENTITY, grade.getId(), AuditAction.CREATE, null, snapshot(grade));
+            }
+            approved.add(FinalGradeResponse.from(grade));
+        }
+        return approved;
+    }
+
+    /**
+     * Termin, który można teraz zatwierdzić: pierwszy, otwarty szkic albo kolejny
+     * po zatwierdzonym niezaliczonym. Null, gdy student zaliczył albo wyczerpał terminy.
+     */
+    private static @Nullable FinalAttempt openAttempt(List<FinalGrade> attemptsAscending) {
+        if (attemptsAscending.isEmpty()) {
+            return FinalAttempt.FIRST;
+        }
+        FinalGrade last = attemptsAscending.getLast();
+        if (!last.isApproved()) {
+            return last.getAttempt();
+        }
+        return last.getGradeValue().isPassing() ? null : last.getAttempt().next();
+    }
+
+    private Map<UUID, List<FinalGrade>> gradesByEnrollment(UUID groupId) {
+        return finalGrades.findForGroup(groupId).stream()
+                .sorted(Comparator.comparing(FinalGrade::getAttempt))
+                .collect(Collectors.groupingBy(g -> g.getGroupEnrollment().getId()));
+    }
+
+    // prowadzący: propozycja oceny
 
     /**
      * Propozycja oceny końcowej na podstawie ostatnich prób z każdego elementu zaliczenia.
@@ -121,8 +243,28 @@ public class FinalGradeService {
     @Transactional(readOnly = true)
     public List<FinalGradeProposalResponse> proposals(UUID groupId) {
         ClassGroup group = myGroup(groupId);
+        List<GroupEnrollment> roster = enrollments.findRoster(groupId);
+        Map<UUID, Proposal> proposalsByEnrollment = proposalsFor(group, roster);
+
+        return roster.stream().map(enrollment -> {
+            Proposal proposal = proposalsByEnrollment.get(enrollment.getId());
+            var student = enrollment.getStudy().getStudent();
+            return new FinalGradeProposalResponse(
+                    enrollment.getId(),
+                    student.getUserId(),
+                    student.getUser().getFirstName(),
+                    student.getUser().getLastName(),
+                    student.getAlbumNumber(),
+                    proposal.average(),
+                    proposal.value() == null ? null : proposal.value().getId(),
+                    proposal.value() == null ? null : proposal.value().getLabel());
+        }).toList();
+    }
+
+    /** Propozycje dla wszystkich studentów z listy, według identyfikatora zapisu do grupy. */
+    private Map<UUID, Proposal> proposalsFor(ClassGroup group, List<GroupEnrollment> roster) {
         GradingScale componentScale = group.getCourseComponent().getGradingScale();
-        List<AssessmentItem> allItems = items.findByClassGroupIdOrderByOrderIndex(groupId);
+        List<AssessmentItem> allItems = items.findByClassGroupIdOrderByOrderIndex(group.getId());
         List<AssessmentItem> gradedItems = allItems.stream()
                 .filter(i -> i.getGradingScale().getType() == GradingScaleType.NUMERIC)
                 .toList();
@@ -136,7 +278,7 @@ public class FinalGradeService {
                 && (componentScale.getType() == GradingScaleType.PASS_FAIL || !gradedItems.isEmpty());
 
         Map<String, PartialGrade> latest = new HashMap<>();
-        for (PartialGrade grade : partialGrades.findForGroup(groupId)) {
+        for (PartialGrade grade : partialGrades.findForGroup(group.getId())) {
             latest.put(key(grade.getGroupEnrollment(), grade.getAssessmentItem()), grade);
         }
         List<GradeValue> numericValues = componentScale.getValues().stream()
@@ -144,21 +286,13 @@ public class FinalGradeService {
                 .sorted(Comparator.comparing(GradeValue::getNumericValue))
                 .toList();
 
-        return enrollments.findRoster(groupId).stream().map(enrollment -> {
-            Proposal proposal = computable
+        Map<UUID, Proposal> result = new HashMap<>();
+        for (GroupEnrollment enrollment : roster) {
+            result.put(enrollment.getId(), computable
                     ? propose(enrollment, allItems, gradedItems, latest, componentScale, numericValues)
-                    : Proposal.NONE;
-            var student = enrollment.getStudy().getStudent();
-            return new FinalGradeProposalResponse(
-                    enrollment.getId(),
-                    student.getUserId(),
-                    student.getUser().getFirstName(),
-                    student.getUser().getLastName(),
-                    student.getAlbumNumber(),
-                    proposal.average(),
-                    proposal.value() == null ? null : proposal.value().getId(),
-                    proposal.value() == null ? null : proposal.value().getLabel());
-        }).toList();
+                    : Proposal.NONE);
+        }
+        return result;
     }
 
     private record Proposal(@Nullable BigDecimal average, @Nullable GradeValue value) {
@@ -229,7 +363,7 @@ public class FinalGradeService {
         return enrollment.getId() + ":" + item.getId();
     }
 
-    // ---------- student: indeks ----------
+    // student: indeks
 
     @Transactional(readOnly = true)
     public List<StudyTranscriptResponse> myTranscript() {
@@ -265,7 +399,7 @@ public class FinalGradeService {
                 value.getLabel(), value.getNumericValue(), value.isPassing(), grade.getApprovedAt());
     }
 
-    // ---------- pomocnicze ----------
+    // pomocnicze
 
     private ClassGroup myGroup(UUID groupId) {
         return groups.findDetailed(groupId)

@@ -28,6 +28,19 @@ public class FinalGradeController {
         return finalGradeService.approve(groupId, finalGradeId);
     }
 
+    @PostMapping("/api/lecturer/groups/{groupId}/final-grades/approvals")
+    @PreAuthorize("hasRole('LECTURER')")
+    public List<FinalGradeResponse> approveBatch(@PathVariable UUID groupId,
+                                                 @Valid @RequestBody FinalGradeBatchRequest request) {
+        return finalGradeService.approveBatch(groupId, request);
+    }
+
+    @GetMapping("/api/lecturer/groups/{groupId}/final-grade-sheet")
+    @PreAuthorize("hasRole('LECTURER')")
+    public List<FinalGradeSheetRowResponse> sheet(@PathVariable UUID groupId) {
+        return finalGradeService.sheet(groupId);
+    }
+
     @GetMapping("/api/lecturer/groups/{groupId}/final-grades")
     @PreAuthorize("hasRole('LECTURER')")
     public List<FinalGradeResponse> listForGroup(@PathVariable UUID groupId) {
