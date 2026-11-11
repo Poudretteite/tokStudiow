@@ -1,17 +1,16 @@
-import { Center, Loader } from '@mantine/core';
 import { Navigate, Outlet, useLocation } from 'react-router';
+import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from './AuthContext';
 
-/** Wpuszcza tylko zalogowanych; pozostałych odsyła na stronę logowania. */
 export function RequireAuth() {
     const { user, loading } = useAuth();
     const location = useLocation();
 
     if (loading) {
         return (
-            <Center h="100vh">
-                <Loader />
-            </Center>
+            <div className="flex min-h-screen items-center justify-center text-navy">
+                <Spinner />
+            </div>
         );
     }
     if (!user) {

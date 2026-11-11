@@ -67,7 +67,7 @@ public class FinalGrade {
         this.gradeValue = newValue;
     }
 
-    void approve(User approver) {
+    public void approve(User approver) {
         requireDraft();
         this.status = FinalGradeStatus.APPROVED;
         this.approvedBy = approver;

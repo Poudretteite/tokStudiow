@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+
+    --color-navy: #1f3a5f;
+    --color-navy-dark: #172d4a;
+    --color-page: #f3f5f8;
+    --color-line: #d7dde5;
+    --color-ink: #1d2430;
+    --color-muted: #5b6676;
+    --color-head: #eef1f5;
+    --color-panel-head: #f7f8fa;
+}
+
+@layer base {
+    body {
+        @apply bg-page font-sans text-ink antialiased;
+    }
+}
