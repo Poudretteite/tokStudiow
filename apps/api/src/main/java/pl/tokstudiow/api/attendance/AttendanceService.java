@@ -90,7 +90,9 @@ public class AttendanceService {
 
     @Transactional
     public List<AttendanceResponse> record(UUID sessionId, RecordAttendanceRequest request) {
-        ClassSession session = mySession(sessionId);
+        ClassSession session = sessions.findByIdForUpdate(sessionId)
+                .filter(this::isMySession)
+                .orElseThrow(AttendanceService::sessionNotFound);
         if (session.isCancelled()) {
             throw new BusinessRuleException("Cannot record attendance for a cancelled session");
         }
@@ -108,6 +110,9 @@ public class AttendanceService {
         // Zapisy tylko z grupy tych zajęć – wszystko albo nic
         Map<UUID, GroupEnrollment> groupEnrollments = enrollments.findRoster(session.getClassGroup().getId()).stream()
                 .collect(Collectors.toMap(GroupEnrollment::getId, Function.identity()));
+        // Dotychczasowa lista jednym zapytaniem zamiast osobnego dla każdej osoby
+        Map<UUID, Attendance> existingByEnrollment = attendance.findForSession(sessionId).stream()
+                .collect(Collectors.toMap(a -> a.getGroupEnrollment().getId(), Function.identity()));
         User recorder = users.getReferenceById(CurrentUser.id());
 
         for (AttendanceEntryRequest entry : request.entries()) {
@@ -116,13 +121,11 @@ public class AttendanceService {
                 throw new NotFoundException("Enrollment not found");
             }
 
-            Optional<Attendance> existing =
-                    attendance.findByClassSessionIdAndGroupEnrollmentId(sessionId, enrollment.getId());
-            if (existing.isEmpty()) {
+            Attendance record = existingByEnrollment.get(enrollment.getId());
+            if (record == null) {
                 Attendance created = attendance.save(new Attendance(session, enrollment, entry.status(), recorder));
                 audit.record("attendance", created.getId(), AuditAction.CREATE, null, snapshot(created));
-            } else if (existing.get().getStatus() != entry.status()) {
-                Attendance record = existing.get();
+            } else if (record.getStatus() != entry.status()) {
                 Map<String, Object> before = snapshot(record);
                 record.changeStatus(entry.status(), recorder);
                 audit.record("attendance", record.getId(), AuditAction.UPDATE, before, snapshot(record));
@@ -136,6 +139,13 @@ public class AttendanceService {
     public List<AttendanceResponse> sessionAttendance(UUID sessionId) {
         mySession(sessionId);
         return attendance.findForSession(sessionId).stream().map(AttendanceResponse::from).toList();
+    }
+
+    /** Obecności całej grupy ze wszystkich zajęć – tabela prowadzącego. */
+    @Transactional(readOnly = true)
+    public List<GroupAttendanceResponse> groupAttendance(UUID groupId) {
+        myGroup(groupId);
+        return attendance.findForGroup(groupId).stream().map(GroupAttendanceResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -159,8 +169,16 @@ public class AttendanceService {
 
     private ClassSession mySession(UUID sessionId) {
         return sessions.findById(sessionId)
-                .filter(s -> s.getClassGroup().getLecturer().getUserId().equals(CurrentUser.id()))
-                .orElseThrow(() -> new NotFoundException("Session not found"));
+                .filter(this::isMySession)
+                .orElseThrow(AttendanceService::sessionNotFound);
+    }
+
+    private boolean isMySession(ClassSession session) {
+        return session.getClassGroup().getLecturer().getUserId().equals(CurrentUser.id());
+    }
+
+    private static NotFoundException sessionNotFound() {
+        return new NotFoundException("Session not found");
     }
 
     private static Map<String, Object> snapshot(Attendance record) {

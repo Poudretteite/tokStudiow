@@ -32,4 +32,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, UUID> {
             """)
     List<Attendance> findForStudentInGroup(@Param("classGroupId") UUID classGroupId,
                                            @Param("studentId") UUID studentId);
+
+    /** Wszystkie obecności grupy jednym zapytaniem – do tabeli „studenci × zajęcia”. */
+    @Query("select a from Attendance a where a.classSession.classGroup.id = :classGroupId")
+    List<Attendance> findForGroup(@Param("classGroupId") UUID classGroupId);
 }

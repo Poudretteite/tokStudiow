@@ -149,3 +149,20 @@ export interface FinalGradeSheetRow {
     openAttempt: FinalAttempt | null;
     draftGradeValueId: string | null;
 }
+
+export interface ClassSession {
+    id: string;
+    classGroupId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    roomId: string | null;
+    cancelled: boolean;
+}
+
+/** Jedna komórka tabeli obecności: student × zajęcia. */
+export interface GroupAttendance {
+    sessionId: string;
+    enrollmentId: string;
+    status: AttendanceStatus;
+}
