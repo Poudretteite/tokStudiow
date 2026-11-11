@@ -29,6 +29,7 @@ export interface ClassGroup {
     courseCode: string;
     courseName: string;
     componentType: ComponentType;
+    gradingScaleId: string;
     academicTermId: string;
     academicTermName: string;
     lecturerId: string;
@@ -41,6 +42,8 @@ export interface ClassGroup {
 export interface AssessmentItem {
     id: string;
     name: string;
+    gradingType: 'NUMERIC' | 'PASS_FAIL';
+    gradingScaleId: string;
     weightPercent: number;
     orderIndex: number;
     plannedDate: string | null;
@@ -48,6 +51,11 @@ export interface AssessmentItem {
 
 export interface PartialGrade {
     id: string;
+    enrollmentId: string;
+    studentId: string;
+    studentFirstName: string;
+    studentLastName: string;
+    albumNumber: string;
     assessmentItemId: string;
     assessmentItemName: string;
     gradeLabel: string;
@@ -83,4 +91,28 @@ export interface StudyTranscript {
     fieldOfStudyName: string;
     average: number | null;
     entries: TranscriptEntry[];
+}
+
+export interface RosterEntry {
+    enrollmentId: string;
+    studyId: string;
+    studentId: string;
+    firstName: string;
+    lastName: string;
+    albumNumber: string;
+    enrolledAt: string;
+}
+
+export interface GradeValue {
+    id: string;
+    label: string;
+    numericValue: number | null;
+    passing: boolean;
+}
+
+export interface GradingScale {
+    id: string;
+    name: string;
+    type: 'NUMERIC' | 'PASS_FAIL';
+    values: GradeValue[];
 }

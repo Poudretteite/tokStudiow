@@ -47,4 +47,6 @@ public interface FinalGradeRepository extends JpaRepository<FinalGrade, UUID> {
             """)
     @Nullable Double averageForStudy(@Param("studyId") UUID studyId,
                                      @Param("status") FinalGradeStatus status);
+
+    boolean existsByGroupEnrollmentIdAndStatus(UUID groupEnrollmentId, FinalGradeStatus status);
 }

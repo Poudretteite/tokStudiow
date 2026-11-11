@@ -131,9 +131,9 @@ public class DevDataInitializer implements ApplicationRunner {
 
         // Oceny cząstkowe
         AssessmentItem quiz = items.save(new AssessmentItem(
-                dbLab, "Kolokwium", new BigDecimal("40"), (short) 1, today.minusWeeks(2)));
+                dbLab, numeric, "Kolokwium", new BigDecimal("40"), (short) 1, today.minusWeeks(2)));
         AssessmentItem project = items.save(new AssessmentItem(
-                dbLab, "Projekt", new BigDecimal("60"), (short) 2, null));
+                dbLab, numeric, "Projekt", new BigDecimal("60"), (short) 2, null));
         partialGrades.save(new PartialGrade(inDbLab, quiz, value(numeric, "4,0"), (short) 1, lecturerUser));
         partialGrades.save(new PartialGrade(inDbLab, project, value(numeric, "4,5"), (short) 1, lecturerUser));
 

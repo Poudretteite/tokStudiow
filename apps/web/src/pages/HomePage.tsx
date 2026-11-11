@@ -98,6 +98,14 @@ export function HomePage() {
                         </div>
                     </Panel>
                 )}
+
+                {user.role === 'LECTURER' && (
+                    <Panel title="Na skróty">
+                        <Shortcut to="/teaching" title="Moje grupy">
+                            Elementy zaliczenia i oceny cząstkowe w prowadzonych grupach.
+                        </Shortcut>
+                    </Panel>
+                )}
             </div>
         </>
     );

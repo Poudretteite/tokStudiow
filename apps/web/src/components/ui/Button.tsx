@@ -1,9 +1,10 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 import { Spinner } from './Spinner';
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
     variant?: 'primary' | 'secondary';
     loading?: boolean;
+    ref?: Ref<HTMLButtonElement>;
 };
 
 const VARIANTS = {

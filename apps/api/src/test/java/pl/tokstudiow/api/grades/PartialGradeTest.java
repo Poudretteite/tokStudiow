@@ -18,6 +18,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 class PartialGradeTest extends IntegrationTest {
 
@@ -207,5 +209,108 @@ class PartialGradeTest extends IntegrationTest {
 
     private ResultActions myGrades(String token, ClassGroup g) throws Exception {
         return mvc.perform(get("/api/me/groups/{id}/partial-grades", g.getId()).header(AUTHORIZATION, bearer(token)));
+    }
+
+    @Test
+    void lecturerCorrectsMistypedGradeWithReason() throws Exception {
+        String itemId = idOf(addItem(lecturerToken, group, "Kolokwium 1", "40"));
+        String gradeId = idOf(issue(lecturerToken, group, annaEnrollment.getId().toString(), itemId, numeric("3,0")));
+
+        correct(lecturerToken, gradeId, numeric("3,5"), "Pomyłka przy wpisywaniu")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gradeLabel").value("3,5"))
+                .andExpect(jsonPath("$.attempt").value(1));
+
+        // korekta nie tworzy nowej próby
+        myGrades(annaToken, group)
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].gradeLabel").value("3,5"));
+
+        createUser("Ada", "Admin", "admin@test.pl", Role.ADMIN);
+        auditHistory("partial_grade", gradeId, tokenFor("admin@test.pl"))
+                .andExpect(jsonPath("$[0].action").value("UPDATE"))
+                .andExpect(jsonPath("$[0].oldValue.grade").value("3,0"))
+                .andExpect(jsonPath("$[0].newValue.grade").value("3,5"))
+                .andExpect(jsonPath("$[0].newValue.reason").value("Pomyłka przy wpisywaniu"));
+    }
+
+    @Test
+    void correctionRequiresReason() throws Exception {
+        String itemId = idOf(addItem(lecturerToken, group, "Kolokwium 1", "40"));
+        String gradeId = idOf(issue(lecturerToken, group, annaEnrollment.getId().toString(), itemId, numeric("3,0")));
+
+        correct(lecturerToken, gradeId, numeric("3,5"), "").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void otherLecturerCannotCorrectGrade() throws Exception {
+        String itemId = idOf(addItem(lecturerToken, group, "Kolokwium 1", "40"));
+        String gradeId = idOf(issue(lecturerToken, group, annaEnrollment.getId().toString(), itemId, numeric("3,0")));
+
+        mvc.perform(patch("/api/lecturer/groups/{g}/partial-grades/{id}", group.getId(), gradeId)
+                        .header(AUTHORIZATION, bearer(otherLecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(correctionJson(numeric("5,0"), "Próba zmiany")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void partialGradesAreLockedAfterFinalGradeApproval() throws Exception {
+        String itemId = idOf(addItem(lecturerToken, group, "Kolokwium 1", "40"));
+        String gradeId = idOf(issue(lecturerToken, group, annaEnrollment.getId().toString(), itemId, numeric("3,0")));
+
+        String finalId = idOf(mvc.perform(put("/api/lecturer/groups/{id}/final-grades", group.getId())
+                .header(AUTHORIZATION, bearer(lecturerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"enrollmentId": "%s", "attempt": "FIRST", "gradeValueId": "%s"}
+                        """.formatted(annaEnrollment.getId(), numeric("3,0")))));
+        mvc.perform(post("/api/lecturer/groups/{g}/final-grades/{id}/approve", group.getId(), finalId)
+                .header(AUTHORIZATION, bearer(lecturerToken)));
+
+        correct(lecturerToken, gradeId, numeric("4,0"), "Zmiana po zatwierdzeniu")
+                .andExpect(status().isConflict());
+    }
+
+    private ResultActions correct(String token, String gradeId, String gradeValueId, String reason) throws Exception {
+        return mvc.perform(patch("/api/lecturer/groups/{g}/partial-grades/{id}", group.getId(), gradeId)
+                .header(AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(correctionJson(gradeValueId, reason)));
+    }
+
+    private static String correctionJson(String gradeValueId, String reason) {
+        return """
+                {"gradeValueId": "%s", "reason": "%s"}
+                """.formatted(gradeValueId, reason);
+    }
+
+    @Test
+    void passFailItemHasNoWeightAndAcceptsOnlyPassFailValues() throws Exception {
+        String itemId = idOf(mvc.perform(post("/api/lecturer/groups/{id}/assessment-items", group.getId())
+                        .header(AUTHORIZATION, bearer(lecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Sprawozdania", "gradingType": "PASS_FAIL"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.gradingType").value("PASS_FAIL"))
+                .andExpect(jsonPath("$.weightPercent").value(0)));
+
+        String zal = fixtures.gradeValue(GradingScaleType.PASS_FAIL, "zal").getId().toString();
+        issue(lecturerToken, group, annaEnrollment.getId().toString(), itemId, zal).andExpect(status().isCreated());
+        issue(lecturerToken, group, janEnrollment.getId().toString(), itemId, numeric("4,0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void gradedItemRequiresWeight() throws Exception {
+        mvc.perform(post("/api/lecturer/groups/{id}/assessment-items", group.getId())
+                        .header(AUTHORIZATION, bearer(lecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Kolokwium", "gradingType": "NUMERIC"}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 }
