@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,4 +34,12 @@ public interface GroupEnrollmentRepository extends JpaRepository<GroupEnrollment
             order by u.lastName, u.firstName
             """)
     List<GroupEnrollment> findRoster(@Param("classGroupId") UUID classGroupId);
+
+    /** Liczba zapisanych w każdej z grup jednym zapytaniem: [id grupy, liczba]. */
+    @Query("""
+            select e.classGroup.id, count(e) from GroupEnrollment e
+            where e.classGroup.id in :classGroupIds
+            group by e.classGroup.id
+            """)
+    List<Object[]> countByClassGroupIds(@Param("classGroupIds") Collection<UUID> classGroupIds);
 }

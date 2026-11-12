@@ -13,6 +13,7 @@ import pl.tokstudiow.api.groups.ClassGroup;
 import pl.tokstudiow.api.groups.ClassGroupRepository;
 import pl.tokstudiow.api.groups.GroupEnrollment;
 import pl.tokstudiow.api.groups.GroupEnrollmentRepository;
+import pl.tokstudiow.api.people.CurrentDeanOffice;
 import pl.tokstudiow.api.studies.StudyRepository;
 import pl.tokstudiow.api.university.GradeValue;
 import pl.tokstudiow.api.university.GradeValueRepository;
@@ -41,6 +42,7 @@ public class FinalGradeService {
     private final GradeValueRepository gradeValues;
     private final StudyRepository studies;
     private final UserRepository users;
+    private final CurrentDeanOffice deanOffice;
     private final AuditService audit;
 
     public FinalGradeService(ClassGroupRepository groups,
@@ -51,6 +53,7 @@ public class FinalGradeService {
                              GradeValueRepository gradeValues,
                              StudyRepository studies,
                              UserRepository users,
+                             CurrentDeanOffice deanOffice,
                              AuditService audit) {
         this.groups = groups;
         this.enrollments = enrollments;
@@ -60,6 +63,7 @@ public class FinalGradeService {
         this.gradeValues = gradeValues;
         this.studies = studies;
         this.users = users;
+        this.deanOffice = deanOffice;
         this.audit = audit;
     }
 
@@ -361,6 +365,60 @@ public class FinalGradeService {
 
     private static String key(GroupEnrollment enrollment, AssessmentItem item) {
         return enrollment.getId() + ":" + item.getId();
+    }
+
+    // dziekanat: protokół i korekta zatwierdzonej oceny
+
+    /** Oceny końcowe grupy z wydziału pracownika dziekanatu (protokół). */
+    @Transactional(readOnly = true)
+    public List<FinalGradeResponse> protocol(UUID groupId) {
+        groups.findDetailed(groupId)
+                .filter(g -> g.facultyId().equals(deanOffice.facultyId()))
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+        return finalGrades.findForGroup(groupId).stream()
+                .sorted(Comparator.comparing((FinalGrade g) -> g.getGroupEnrollment().getStudy().getStudent().getUser().getLastName())
+                        .thenComparing(g -> g.getGroupEnrollment().getStudy().getStudent().getUser().getFirstName())
+                        .thenComparing(FinalGrade::getAttempt))
+                .map(FinalGradeResponse::from)
+                .toList();
+    }
+
+    /**
+     * Korekta zatwierdzonej oceny końcowej przez dziekanat (np. na wniosek prowadzącego).
+     * Tylko ostatni termin studenta – zmiana wcześniejszego unieważniłaby sens kolejnych.
+     * Uzasadnienie i poprzednia wartość trafiają do audytu.
+     */
+    @Transactional
+    public FinalGradeResponse correctApproved(UUID finalGradeId, CorrectGradeRequest request) {
+        UUID facultyId = deanOffice.facultyId();
+        FinalGrade grade = finalGrades.findById(finalGradeId)
+                .filter(g -> g.getGroupEnrollment().getClassGroup().facultyId().equals(facultyId))
+                .orElseThrow(() -> new NotFoundException("Final grade not found"));
+
+        boolean laterAttemptExists = finalGrades.findForGroup(grade.getGroupEnrollment().getClassGroup().getId()).stream()
+                .anyMatch(g -> g.getGroupEnrollment().getId().equals(grade.getGroupEnrollment().getId())
+                        && g.getAttempt().compareTo(grade.getAttempt()) > 0);
+        if (laterAttemptExists) {
+            throw new ConflictException("Only the latest attempt can be corrected");
+        }
+
+        GradeValue value = gradeValues.findById(request.gradeValueId())
+                .orElseThrow(() -> new NotFoundException("Grade value not found"));
+        GradingScale scale = grade.getGroupEnrollment().getClassGroup().getCourseComponent().getGradingScale();
+        if (!value.getGradingScale().getId().equals(scale.getId())) {
+            throw new BusinessRuleException("Grade value does not belong to the grading scale of this course component");
+        }
+        if (value.getId().equals(grade.getGradeValue().getId())) {
+            return FinalGradeResponse.from(grade);
+        }
+
+        Map<String, Object> before = snapshot(grade);
+        grade.correctApproved(value);
+        Map<String, Object> after = snapshot(grade);
+        after.put("correctedBy", CurrentUser.id().toString());
+        after.put("reason", request.reason().trim());
+        audit.record(AUDIT_ENTITY, grade.getId(), AuditAction.UPDATE, before, after);
+        return FinalGradeResponse.from(grade);
     }
 
     // student: indeks

@@ -118,6 +118,20 @@ public class DevDataInitializer implements ApplicationRunner {
         StudentProfile student = studentProfiles.save(new StudentProfile(studentUser, "123456", null));
         Study study = studies.save(new Study(student, cs, (short) (today.getYear() - 1), (short) 3));
 
+        // Kolejni studenci bez zapisów – do ćwiczenia zapisów w dziekanacie
+        String[][] others = {
+                {"Piotr", "Zając", "123457"}, {"Katarzyna", "Lewandowska", "123458"},
+                {"Tomasz", "Wójcik", "123459"}, {"Magdalena", "Kamińska", "123460"},
+                {"Michał", "Zieliński", "123461"}, {"Aleksandra", "Szymańska", "123462"},
+                {"Jakub", "Dąbrowski", "123463"}, {"Natalia", "Kozłowska", "123464"}};
+        for (int i = 0; i < others.length; i++) {
+            User other = user(others[i][0], others[i][1], "student" + (i + 2) + "@tokstudiow.local", Role.STUDENT);
+            StudentProfile profile = studentProfiles.save(new StudentProfile(other, others[i][2], null));
+            studies.save(new Study(profile, cs, (short) (today.getYear() - 1), (short) 3));
+        }
+        User secondLecturer = user("Marta", "Zielińska", "prowadzaca2@tokstudiow.local", Role.LECTURER);
+        lecturerProfiles.save(new LecturerProfile(secondLecturer, faculty, "mgr inż."));
+
         // Grupy i zapisy
         ClassGroup dbLecture = groups.save(new ClassGroup(
                 component(databases, ComponentType.LECTURE), term, lecturer, (short) 1, null));

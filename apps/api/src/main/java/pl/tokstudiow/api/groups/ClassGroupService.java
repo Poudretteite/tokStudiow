@@ -19,6 +19,8 @@ import pl.tokstudiow.api.university.AcademicTermRepository;
 import pl.tokstudiow.api.university.CourseComponent;
 import pl.tokstudiow.api.university.CourseComponentRepository;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,15 +93,45 @@ public class ClassGroupService {
     @Transactional
     public RosterEntryResponse enroll(UUID groupId, EnrollRequest request) {
         UUID facultyId = deanOffice.facultyId();
+        ClassGroup group = lockedGroup(groupId, facultyId);
+        return enrollOne(group, studyInFaculty(request.studyId(), facultyId));
+    }
 
-        // Blokada wiersza grupy: dwa równoczesne zapisy na ostatnie miejsce wykonają się po kolei
-        ClassGroup group = groups.findByIdForUpdate(groupId)
+    /**
+     * Zapisuje wielu studentów naraz, atomowo: jeden niepoprawny wpis (zły kierunek,
+     * urlop, brak miejsc) wycofuje cały zapis, więc lista nigdy nie zostaje „w połowie”.
+     */
+    @Transactional
+    public List<RosterEntryResponse> enrollBatch(UUID groupId, BatchEnrollRequest request) {
+        UUID facultyId = deanOffice.facultyId();
+        ClassGroup group = lockedGroup(groupId, facultyId);
+
+        if (new HashSet<>(request.studyIds()).size() != request.studyIds().size()) {
+            throw new BusinessRuleException("Each student may appear only once in the request");
+        }
+        if (group.getCapacity() != null
+                && enrollments.countByClassGroupId(group.getId()) + request.studyIds().size() > group.getCapacity()) {
+            throw new ConflictException("Group is full");
+        }
+        return request.studyIds().stream()
+                .map(studyId -> enrollOne(group, studyInFaculty(studyId, facultyId)))
+                .toList();
+    }
+
+    /** Blokada wiersza grupy: dwa równoczesne zapisy na ostatnie miejsce wykonają się po kolei. */
+    private ClassGroup lockedGroup(UUID groupId, UUID facultyId) {
+        return groups.findByIdForUpdate(groupId)
                 .filter(g -> g.facultyId().equals(facultyId))
                 .orElseThrow(() -> new NotFoundException("Group not found"));
-        Study study = studies.findById(request.studyId())
+    }
+
+    private Study studyInFaculty(UUID studyId, UUID facultyId) {
+        return studies.findById(studyId)
                 .filter(s -> s.getFieldOfStudy().getFaculty().getId().equals(facultyId))
                 .orElseThrow(() -> new NotFoundException("Study not found"));
+    }
 
+    private RosterEntryResponse enrollOne(ClassGroup group, Study study) {
         if (study.getStatus() != StudyStatus.ACTIVE) {
             throw new BusinessRuleException("Only active students can be enrolled");
         }
@@ -128,6 +160,29 @@ public class ClassGroupService {
     }
 
     // odczyt
+
+    /** Grupy wydziału w semestrze, z liczbą zapisanych (jedno zapytanie na liczniki). */
+    @Transactional(readOnly = true)
+    public List<FacultyGroupResponse> listForMyFaculty(UUID academicTermId) {
+        List<ClassGroup> found = groups.findForFaculty(deanOffice.facultyId(), academicTermId);
+        Map<UUID, Long> counts = new HashMap<>();
+        if (!found.isEmpty()) {
+            for (Object[] row : enrollments.countByClassGroupIds(found.stream().map(ClassGroup::getId).toList())) {
+                counts.put((UUID) row[0], (Long) row[1]);
+            }
+        }
+        return found.stream()
+                .map(g -> new FacultyGroupResponse(ClassGroupResponse.from(g), counts.getOrDefault(g.getId(), 0L)))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ClassGroupResponse getForMyFaculty(UUID groupId) {
+        return groups.findDetailed(groupId)
+                .filter(g -> g.facultyId().equals(deanOffice.facultyId()))
+                .map(ClassGroupResponse::from)
+                .orElseThrow(() -> new NotFoundException("Group not found"));
+    }
 
     @Transactional(readOnly = true)
     public List<RosterEntryResponse> roster(UUID groupId) {

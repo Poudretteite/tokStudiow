@@ -14,3 +14,9 @@ export function formatTime(time: string): string {
 export function formatAverage(value: number): string {
     return averageFormat.format(value);
 }
+const instantFormat = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'numeric', year: 'numeric' });
+
+/** Znacznik czasu z API (ISO 8601 z UTC) jako data w strefie użytkownika. */
+export function formatInstant(iso: string): string {
+    return instantFormat.format(new Date(iso));
+}

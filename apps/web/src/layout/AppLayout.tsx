@@ -14,7 +14,11 @@ const NAVIGATION: Record<Role, { label: string; to: string }[]> = {
         { label: 'Strona główna', to: '/' },
         { label: 'Moje grupy', to: '/teaching' },
     ],
-    DEAN_OFFICE: [{ label: 'Strona główna', to: '/' }],
+    DEAN_OFFICE: [
+        { label: 'Strona główna', to: '/' },
+        { label: 'Grupy zajęciowe', to: '/dean/groups' },
+        { label: 'Studenci', to: '/dean/students' },
+    ],
     ADMIN: [{ label: 'Strona główna', to: '/' }],
 };
 

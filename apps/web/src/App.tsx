@@ -9,6 +9,9 @@ import { MyGroupsPage } from './pages/student/MyGroupsPage';
 import { TranscriptPage } from './pages/student/TranscriptPage';
 import { LecturerGroupPage } from './pages/lecturer/LecturerGroupPage';
 import { LecturerGroupsPage } from './pages/lecturer/LecturerGroupsPage';
+import { DeanGroupPage } from './pages/dean/DeanGroupPage';
+import { DeanGroupsPage } from './pages/dean/DeanGroupsPage';
+import { StudentsPage } from './pages/dean/StudentsPage';
 
 export default function App() {
     return (
@@ -25,6 +28,11 @@ export default function App() {
                     <Route element={<RequireRole roles={['LECTURER']} />}>
                         <Route path="teaching" element={<LecturerGroupsPage />} />
                         <Route path="teaching/:groupId" element={<LecturerGroupPage />} />
+                    </Route>
+                    <Route element={<RequireRole roles={['DEAN_OFFICE']} />}>
+                        <Route path="dean/groups" element={<DeanGroupsPage />} />
+                        <Route path="dean/groups/:groupId" element={<DeanGroupPage />} />
+                        <Route path="dean/students" element={<StudentsPage />} />
                     </Route>
                 </Route>
             </Route>
