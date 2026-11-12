@@ -24,6 +24,26 @@ public class ClassGroupController {
         return groupService.create(request);
     }
 
+    @GetMapping("/api/dean-office/groups")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public List<FacultyGroupResponse> listForMyFaculty(@RequestParam UUID academicTermId) {
+        return groupService.listForMyFaculty(academicTermId);
+    }
+
+    @GetMapping("/api/dean-office/groups/{groupId}")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public ClassGroupResponse getForMyFaculty(@PathVariable UUID groupId) {
+        return groupService.getForMyFaculty(groupId);
+    }
+
+    @PostMapping("/api/dean-office/groups/{groupId}/enrollments/batch")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<RosterEntryResponse> enrollBatch(@PathVariable UUID groupId,
+                                                 @Valid @RequestBody BatchEnrollRequest request) {
+        return groupService.enrollBatch(groupId, request);
+    }
+
     @PostMapping("/api/dean-office/groups/{groupId}/enrollments")
     @PreAuthorize("hasRole('DEAN_OFFICE')")
     @ResponseStatus(HttpStatus.CREATED)

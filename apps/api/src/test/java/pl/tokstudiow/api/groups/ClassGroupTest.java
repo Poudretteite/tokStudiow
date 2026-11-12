@@ -20,6 +20,7 @@ import pl.tokstudiow.api.user.User;
 
 import java.time.LocalDate;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -159,6 +160,62 @@ class ClassGroupTest extends IntegrationTest {
                 .andExpect(jsonPath("$[0].newValue.studyId").value(annaStudyId));
     }
 
+    // dziekanat: zapis wielu osób naraz
+
+    @Test
+    void batchEnrollsManyStudentsAtOnce() throws Exception {
+        String groupId = idOf(createGroup(deanToken, 1, 20));
+
+        enrollBatch(groupId, annaStudyId, janStudyId)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$", hasSize(2)));
+        roster(groupId, deanToken).andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    void batchEnrollmentIsAllOrNothing() throws Exception {
+        String group1 = idOf(createGroup(deanToken, 1, 20));
+        String group2 = idOf(createGroup(deanToken, 2, 20));
+        enroll(group1, annaStudyId);
+
+        // Anna jest już w innej grupie tych zajęć – Jan też nie zostaje zapisany
+        enrollBatch(group2, janStudyId, annaStudyId).andExpect(status().isConflict());
+        roster(group2, deanToken).andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    void batchEnrollmentRespectsCapacity() throws Exception {
+        String groupId = idOf(createGroup(deanToken, 1, 1));
+
+        enrollBatch(groupId, annaStudyId, janStudyId).andExpect(status().isConflict());
+        roster(groupId, deanToken).andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    void deanOfficeListsOwnFacultyGroupsWithEnrolledCount() throws Exception {
+        String groupId = idOf(createGroup(deanToken, 1, 20));
+        enroll(groupId, annaStudyId);
+
+        facultyGroups(deanToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].group.id").value(groupId))
+                .andExpect(jsonPath("$[0].enrolledCount").value(1));
+        facultyGroups(otherDeanToken).andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    void deanOfficeSeesLecturersOfOwnFacultyWithoutContactData() throws Exception {
+        mvc.perform(get("/api/dean-office/lecturers").header(AUTHORIZATION, bearer(deanToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].email").doesNotExist());
+        mvc.perform(get("/api/dean-office/lecturers").header(AUTHORIZATION, bearer(otherDeanToken)))
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/dean-office/lecturers").header(AUTHORIZATION, bearer(lecturerToken)))
+                .andExpect(status().isForbidden());
+    }
+
     // kontrola dostępu
 
     @Test
@@ -223,6 +280,20 @@ class ClassGroupTest extends IntegrationTest {
                 .content("""
                         {"studyId": "%s"}
                         """.formatted(studyId)));
+    }
+
+    private ResultActions enrollBatch(String groupId, String... studyIds) throws Exception {
+        String ids = String.join(", ", java.util.Arrays.stream(studyIds).map(id -> "\"" + id + "\"").toList());
+        return mvc.perform(post("/api/dean-office/groups/{id}/enrollments/batch", groupId)
+                .header(AUTHORIZATION, bearer(deanToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"studyIds\": [" + ids + "]}"));
+    }
+
+    private ResultActions facultyGroups(String token) throws Exception {
+        return mvc.perform(get("/api/dean-office/groups")
+                .param("academicTermId", termId)
+                .header(AUTHORIZATION, bearer(token)));
     }
 
     private ResultActions roster(String groupId, String token) throws Exception {

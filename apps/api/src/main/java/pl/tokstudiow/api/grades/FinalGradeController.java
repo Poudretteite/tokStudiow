@@ -53,6 +53,19 @@ public class FinalGradeController {
         return finalGradeService.proposals(groupId);
     }
 
+    @GetMapping("/api/dean-office/groups/{groupId}/final-grades")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public List<FinalGradeResponse> protocol(@PathVariable UUID groupId) {
+        return finalGradeService.protocol(groupId);
+    }
+
+    @PostMapping("/api/dean-office/final-grades/{finalGradeId}/correction")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public FinalGradeResponse correctApproved(@PathVariable UUID finalGradeId,
+                                              @Valid @RequestBody CorrectGradeRequest request) {
+        return finalGradeService.correctApproved(finalGradeId, request);
+    }
+
     @GetMapping("/api/me/transcript")
     @PreAuthorize("hasRole('STUDENT')")
     public List<StudyTranscriptResponse> myTranscript() {

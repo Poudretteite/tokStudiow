@@ -58,4 +58,17 @@ public interface ClassGroupRepository extends JpaRepository<ClassGroup, UUID> {
             order by t.startDate desc, c.name, g.groupNumber
             """)
     List<ClassGroup> findForStudent(@Param("studentId") UUID studentId);
+
+    @Query("""
+            select g from ClassGroup g
+            join fetch g.courseComponent cc
+            join fetch cc.course c
+            join fetch g.academicTerm t
+            join fetch g.lecturer l
+            join fetch l.user
+            where c.fieldOfStudy.faculty.id = :facultyId and t.id = :academicTermId
+            order by c.name, cc.type, g.groupNumber
+            """)
+    List<ClassGroup> findForFaculty(@Param("facultyId") UUID facultyId,
+                                    @Param("academicTermId") UUID academicTermId);
 }

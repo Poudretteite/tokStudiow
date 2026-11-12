@@ -166,3 +166,66 @@ export interface GroupAttendance {
     enrollmentId: string;
     status: AttendanceStatus;
 }
+
+export interface AcademicTerm {
+    id: string;
+    name: string;
+    type: 'WINTER' | 'SUMMER';
+    startDate: string;
+    endDate: string;
+    current: boolean;
+}
+
+export interface FieldOfStudy {
+    id: string;
+    facultyId: string;
+    name: string;
+    level: string;
+    mode: string;
+    semestersCount: number;
+}
+
+export interface CourseComponent {
+    id: string;
+    type: ComponentType;
+    hours: number;
+    gradingScaleId: string;
+}
+
+export interface Course {
+    id: string;
+    fieldOfStudyId: string;
+    code: string;
+    name: string;
+    ects: number;
+    semesterNumber: number;
+    components: CourseComponent[];
+}
+
+export interface Lecturer {
+    id: string;
+    firstName: string;
+    lastName: string;
+    academicTitle: string | null;
+}
+
+/** Grupa na liście dziekanatu z liczbą zapisanych. */
+export interface FacultyGroup {
+    group: ClassGroup;
+    enrolledCount: number;
+}
+
+/** Przebieg studiów widziany przez dziekanat. */
+export interface StudyRecord {
+    id: string;
+    studentId: string;
+    studentFirstName: string;
+    studentLastName: string;
+    albumNumber: string;
+    fieldOfStudyId: string;
+    fieldOfStudyName: string;
+    facultyId: string;
+    startYear: number;
+    currentSemester: number;
+    status: StudyStatus;
+}

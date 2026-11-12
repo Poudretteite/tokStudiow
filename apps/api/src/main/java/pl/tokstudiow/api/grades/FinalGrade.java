@@ -79,6 +79,17 @@ public class FinalGrade {
         this.approvedAt = Instant.now();
     }
 
+    /**
+     * Korekta zatwierdzonej oceny – wyłącznie przez dziekanat, z uzasadnieniem w audycie.
+     * Prowadzący nie ma do niej dostępu, a zatwierdzenie (kto, kiedy) pozostaje bez zmian.
+     */
+    void correctApproved(GradeValue newValue) {
+        if (status != FinalGradeStatus.APPROVED) {
+            throw new ConflictException("Only approved final grades can be corrected");
+        }
+        this.gradeValue = newValue;
+    }
+
     private void requireDraft() {
         if (status == FinalGradeStatus.APPROVED) {
             throw new ConflictException("Approved final grade cannot be changed");

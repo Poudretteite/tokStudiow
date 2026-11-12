@@ -99,6 +99,19 @@ export function HomePage() {
                     </Panel>
                 )}
 
+                {user.role === 'DEAN_OFFICE' && (
+                    <Panel title="Na skróty">
+                        <div className="flex flex-col gap-4">
+                            <Shortcut to="/dean/groups" title="Grupy zajęciowe">
+                                Tworzenie grup, zapisy studentów i protokoły ocen końcowych.
+                            </Shortcut>
+                            <Shortcut to="/dean/students" title="Studenci">
+                                Studenci wydziału, semestr i status studiów.
+                            </Shortcut>
+                        </div>
+                    </Panel>
+                )}
+
                 {user.role === 'LECTURER' && (
                     <Panel title="Na skróty">
                         <Shortcut to="/teaching" title="Moje grupy">

@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.contains;
 
 class FinalGradeTest extends IntegrationTest {
 
+    private Faculty faculty;
     private ClassGroup group;
     private GroupEnrollment anna;
     private GroupEnrollment jan;
@@ -36,7 +37,7 @@ class FinalGradeTest extends IntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        Faculty faculty = fixtures.faculty("Wydział Nauk Ścisłych i Technicznych", "WNŚiT");
+        faculty = fixtures.faculty("Wydział Nauk Ścisłych i Technicznych", "WNŚiT");
         FieldOfStudy field = fixtures.fieldOfStudy(faculty, "Informatyka");
         CourseComponent lab = fixtures.courseComponent(field, "INF-BD", ComponentType.LAB, GradingScaleType.NUMERIC);
         AcademicTerm term = fixtures.term();
@@ -225,6 +226,56 @@ class FinalGradeTest extends IntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    // dziekanat: korekta zatwierdzonej oceny
+
+    @Test
+    void deanOfficeCorrectsApprovedGradeWithReason() throws Exception {
+        String id = approvedId(anna, "4,0");
+        String deanToken = deanToken();
+
+        correct(deanToken, id, "4,5", "Błąd w protokole, wniosek prowadzącego")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gradeLabel").value("4,5"))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+        transcript(annaToken).andExpect(jsonPath("$[0].entries[0].gradeLabel").value("4,5"));
+
+        createUser("Ada", "Admin", "admin@test.pl", Role.ADMIN);
+        auditHistory("final_grade", id, tokenFor("admin@test.pl"))
+                .andExpect(jsonPath("$[0].oldValue.grade").value("4,0"))
+                .andExpect(jsonPath("$[0].newValue.grade").value("4,5"))
+                .andExpect(jsonPath("$[0].newValue.reason").value("Błąd w protokole, wniosek prowadzącego"));
+    }
+
+    @Test
+    void correctionRequiresReason() throws Exception {
+        correct(deanToken(), approvedId(anna, "4,0"), "4,5", " ").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void onlyLatestAttemptCanBeCorrected() throws Exception {
+        String first = approvedId(jan, "2,0");
+        approveBatch(entry(jan, "3,0"));
+
+        correct(deanToken(), first, "3,0", "pomyłka").andExpect(status().isConflict());
+    }
+
+    @Test
+    void draftCannotBeCorrectedByDeanOffice() throws Exception {
+        String draft = idOf(saveDraft(anna, "FIRST", "4,0"));
+
+        correct(deanToken(), draft, "4,5", "pomyłka").andExpect(status().isConflict());
+    }
+
+    @Test
+    void lecturerAndOtherFacultyCannotCorrectApprovedGrade() throws Exception {
+        String id = approvedId(anna, "4,0");
+        Faculty medicine = fixtures.faculty("Wydział Medyczny", "WM");
+        fixtures.deanOffice("dziekanat.wm@test.pl", medicine);
+
+        correct(lecturerToken, id, "5,0", "chcę zmienić").andExpect(status().isForbidden());
+        correct(tokenFor("dziekanat.wm@test.pl"), id, "5,0", "chcę zmienić").andExpect(status().isNotFound());
+    }
+
     // ataki
 
     @Test
@@ -279,6 +330,25 @@ class FinalGradeTest extends IntegrationTest {
     private ResultActions approve(String finalGradeId) throws Exception {
         return mvc.perform(post("/api/lecturer/groups/{g}/final-grades/{id}/approve", group.getId(), finalGradeId)
                 .header(AUTHORIZATION, bearer(lecturerToken)));
+    }
+
+    private String deanToken() throws Exception {
+        fixtures.deanOffice("dziekanat@test.pl", faculty);
+        return tokenFor("dziekanat@test.pl");
+    }
+
+    private String approvedId(GroupEnrollment enrollment, String label) throws Exception {
+        return JsonPath.read(approveBatch(entry(enrollment, label))
+                .andReturn().getResponse().getContentAsString(), "$[0].id");
+    }
+
+    private ResultActions correct(String token, String finalGradeId, String label, String reason) throws Exception {
+        return mvc.perform(post("/api/dean-office/final-grades/{id}/correction", finalGradeId)
+                .header(AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"gradeValueId": "%s", "reason": "%s"}
+                        """.formatted(numeric(label), reason)));
     }
 
     private ResultActions sheet() throws Exception {
