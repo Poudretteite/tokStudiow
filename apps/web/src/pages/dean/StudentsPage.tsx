@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { api } from '../../api/client';
-import type { StudyRecord, StudyStatus } from '../../api/types';
+import type { StudyRecord, StudyStatus, UnassignedStudent } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { QueryState } from '../../components/QueryState';
@@ -13,8 +14,16 @@ import { Table, Td, Th, Tr } from '../../components/ui/Table';
 import { TextField } from '../../components/ui/TextField';
 import { errorMessage } from '../../i18n/errors';
 import { STUDY_STATUS_LABELS } from '../../i18n/labels';
+import { useFacultyCatalog } from './catalog';
 
 const STUDIES_KEY = ['dean', 'studies'];
+const UNASSIGNED_KEY = ['dean', 'students', 'unassigned'];
+
+/** Rok akademicki zaczyna się w październiku: we wrześniu i później – bieżący rok, wcześniej – poprzedni. */
+function academicStartYear(): number {
+    const now = new Date();
+    return now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+}
 
 export function StudentsPage() {
     const studies = useQuery({ queryKey: STUDIES_KEY, queryFn: () => api<StudyRecord[]>('/api/dean-office/studies') });
@@ -25,6 +34,7 @@ export function StudentsPage() {
     return (
         <>
             <PageHeader title="Studenci" crumbs={[{ label: 'Studenci' }]} />
+            <UnassignedPanel onAssigned={(text) => setNotice(text)} />
             <QueryState query={studies}>
                 {(list) => {
                     const phrase = search.trim().toLowerCase();
@@ -110,6 +120,121 @@ export function StudentsPage() {
                 />
             )}
         </>
+    );
+}
+
+/**
+ * Nowe konta od administratora czekają tu na kierunek. Kierunek, rok i semestr ustawia się raz
+ * nad listą, a potem każda osoba to jedno kliknięcie „Przypisz”.
+ */
+function UnassignedPanel({ onAssigned }: { onAssigned: (text: string) => void }) {
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+    const students = useQuery({
+        queryKey: UNASSIGNED_KEY,
+        queryFn: () => api<UnassignedStudent[]>('/api/dean-office/students/unassigned'),
+    });
+    const catalog = useFacultyCatalog(user?.facultyId ?? null);
+    const fields = catalog.data?.fields ?? [];
+    const [chosenFieldId, setFieldId] = useState('');
+    const [startYear, setStartYear] = useState(String(academicStartYear()));
+    const [semester, setSemester] = useState('1');
+    const fieldId = chosenFieldId || fields[0]?.id || '';
+
+    const assign = useMutation({
+        mutationFn: (student: UnassignedStudent) =>
+            api(`/api/dean-office/studies`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    studentId: student.id,
+                    fieldOfStudyId: fieldId,
+                    startYear: Number(startYear),
+                    currentSemester: Number(semester),
+                }),
+            }),
+        onSuccess: async (_, student) => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: UNASSIGNED_KEY }),
+                queryClient.invalidateQueries({ queryKey: STUDIES_KEY }),
+            ]);
+            const field = fields.find((f) => f.id === fieldId)?.name ?? '';
+            onAssigned(`Przypisano: ${student.firstName} ${student.lastName}, ${field}, semestr ${semester}.`);
+        },
+    });
+
+    if (!students.data || students.data.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-6">
+            <Panel
+                title="Nowi studenci bez kierunku"
+                flush
+                aside={<span className="text-sm">{students.data.length}</span>}
+            >
+                <div className="grid gap-4 border-b border-line p-4 sm:grid-cols-[2fr_1fr_1fr]">
+                    <Select label="Kierunek" value={fieldId} onChange={(e) => setFieldId(e.currentTarget.value)}>
+                        {fields.map((f) => (
+                            <option key={f.id} value={f.id}>
+                                {f.name}
+                            </option>
+                        ))}
+                    </Select>
+                    <TextField
+                        label="Rok rozpoczęcia"
+                        type="number"
+                        min={2000}
+                        max={2100}
+                        value={startYear}
+                        onChange={(e) => setStartYear(e.currentTarget.value)}
+                    />
+                    <TextField
+                        label="Semestr"
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={semester}
+                        onChange={(e) => setSemester(e.currentTarget.value)}
+                    />
+                </div>
+                <Table>
+                    <thead>
+                    <tr>
+                        <Th>Student</Th>
+                        <Th>Numer albumu</Th>
+                        <Th />
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {students.data.map((s) => (
+                        <Tr key={s.id}>
+                            <Td>
+                                {s.lastName} {s.firstName}
+                            </Td>
+                            <Td>{s.albumNumber}</Td>
+                            <Td className="text-right">
+                                <Button
+                                    type="button"
+                                    className="px-3 py-1 text-sm"
+                                    disabled={!fieldId || assign.isPending}
+                                    loading={assign.isPending && assign.variables?.id === s.id}
+                                    onClick={() => assign.mutate(s)}
+                                >
+                                    Przypisz
+                                </Button>
+                            </Td>
+                        </Tr>
+                    ))}
+                    </tbody>
+                </Table>
+                {assign.isError && (
+                    <div className="p-4">
+                        <Alert>{errorMessage(assign.error)}</Alert>
+                    </div>
+                )}
+            </Panel>
+        </div>
     );
 }
 

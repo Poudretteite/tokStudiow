@@ -34,6 +34,12 @@ public class StudyController {
         return studyService.listForMyFaculty();
     }
 
+    @GetMapping("/api/dean-office/students/unassigned")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public List<UnassignedStudentResponse> unassignedStudents() {
+        return studyService.unassignedStudents();
+    }
+
     @PostMapping("/api/dean-office/studies")
     @PreAuthorize("hasRole('DEAN_OFFICE')")
     @ResponseStatus(HttpStatus.CREATED)

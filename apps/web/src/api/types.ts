@@ -261,3 +261,11 @@ export interface AuditEntry {
     newValue: Record<string, unknown> | null;
     createdAt: string;
 }
+
+/** Konto studenta czekające na przypisanie kierunku przez dziekanat. */
+export interface UnassignedStudent {
+    id: string;
+    firstName: string;
+    lastName: string;
+    albumNumber: string;
+}

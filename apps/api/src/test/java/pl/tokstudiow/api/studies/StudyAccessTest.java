@@ -76,6 +76,29 @@ class StudyAccessTest extends IntegrationTest {
         adminToken = tokenFor("admin@test.pl");
     }
 
+    // nowe konta bez kierunku
+
+    @Test
+    void newStudentAccountsWaitForFieldOfStudyUntilAssigned() throws Exception {
+        unassigned(deanScienceToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].albumNumber").value("1002"))
+                .andExpect(jsonPath("$[0].email").doesNotExist());
+
+        enroll(deanScienceToken, janId, computerScienceId, 1).andExpect(status().isCreated());
+
+        unassigned(deanMedicineToken)
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].albumNumber").value("1001"));
+    }
+
+    @Test
+    void onlyDeanOfficeSeesUnassignedStudents() throws Exception {
+        unassigned(lecturerToken).andExpect(status().isForbidden());
+        unassigned(annaToken).andExpect(status().isForbidden());
+    }
+
     // zapisy przez dziekanat
 
     @Test
@@ -201,6 +224,10 @@ class StudyAccessTest extends IntegrationTest {
                 .content("""
                         {"studentId": "%s", "fieldOfStudyId": "%s", "startYear": 2026, "currentSemester": %d}
                         """.formatted(studentId, fieldId, semester)));
+    }
+
+    private ResultActions unassigned(String token) throws Exception {
+        return mvc.perform(get("/api/dean-office/students/unassigned").header(AUTHORIZATION, bearer(token)));
     }
 
     private ResultActions getStudy(String id, String token) throws Exception {
