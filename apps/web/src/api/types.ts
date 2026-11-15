@@ -229,3 +229,35 @@ export interface StudyRecord {
     currentSemester: number;
     status: StudyStatus;
 }
+
+export interface Faculty {
+    id: string;
+    name: string;
+    shortName: string;
+}
+
+/** Konto widziane przez administratora. */
+export interface AdminUser {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: Role;
+    active: boolean;
+    createdAt: string;
+    albumNumber: string | null;
+    facultyId: string | null;
+}
+
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
+
+export interface AuditEntry {
+    id: string;
+    actorId: string | null;
+    entityType: string;
+    entityId: string;
+    action: AuditAction;
+    oldValue: Record<string, unknown> | null;
+    newValue: Record<string, unknown> | null;
+    createdAt: string;
+}

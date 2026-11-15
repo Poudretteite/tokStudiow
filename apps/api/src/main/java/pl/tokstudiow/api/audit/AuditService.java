@@ -11,7 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -62,16 +67,56 @@ public class AuditService {
                 """)
                 .param("entityType", entityType)
                 .param("entityId", entityId)
-                .query((rs, rowNum) -> new AuditEntryResponse(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("actor_id", UUID.class),
-                        rs.getString("entity_type"),
-                        rs.getObject("entity_id", UUID.class),
-                        AuditAction.valueOf(rs.getString("action")),
-                        fromJson(rs.getString("old_value")),
-                        fromJson(rs.getString("new_value")),
-                        rs.getObject("created_at", OffsetDateTime.class).toInstant()))
+                .query(this::toEntry)
                 .list();
+    }
+
+    /**
+     * Najnowsze wpisy, opcjonalnie dla jednego typu obiektu lub jednej osoby.
+     * Stronicowanie kursorem (created_at, id): stabilne także dla wpisów z tej samej transakcji,
+     * które mają identyczny czas.
+     */
+    @Transactional(readOnly = true)
+    public List<AuditEntryResponse> recent(@Nullable String entityType, @Nullable UUID actorId,
+                                           @Nullable Instant beforeCreatedAt, @Nullable UUID beforeId, int limit) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT id, actor_id, entity_type, entity_id, action,
+                       CAST(old_value AS text) AS old_value,
+                       CAST(new_value AS text) AS new_value,
+                       created_at
+                FROM audit_log
+                WHERE TRUE
+                """);
+        Map<String, Object> params = new HashMap<>();
+        if (entityType != null) {
+            sql.append(" AND entity_type = :entityType");
+            params.put("entityType", entityType);
+        }
+        if (actorId != null) {
+            sql.append(" AND actor_id = :actorId");
+            params.put("actorId", actorId);
+        }
+        if (beforeCreatedAt != null && beforeId != null) {
+            sql.append(" AND (created_at, id) < (:beforeCreatedAt, :beforeId)");
+            params.put("beforeCreatedAt", OffsetDateTime.ofInstant(beforeCreatedAt, ZoneOffset.UTC));
+            params.put("beforeId", beforeId);
+        }
+        sql.append(" ORDER BY created_at DESC, id DESC LIMIT :limit");
+        params.put("limit", limit);
+
+        return jdbc.sql(sql.toString()).params(params).query(this::toEntry).list();
+    }
+
+    private AuditEntryResponse toEntry(ResultSet rs, int rowNum) throws SQLException {
+        return new AuditEntryResponse(
+                rs.getObject("id", UUID.class),
+                rs.getObject("actor_id", UUID.class),
+                rs.getString("entity_type"),
+                rs.getObject("entity_id", UUID.class),
+                AuditAction.valueOf(rs.getString("action")),
+                fromJson(rs.getString("old_value")),
+                fromJson(rs.getString("new_value")),
+                rs.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 
     private static @Nullable UUID currentActorId() {

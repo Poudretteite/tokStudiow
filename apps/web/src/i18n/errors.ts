@@ -36,6 +36,13 @@ const MESSAGES: Record<string, string> = {
     'Final grade not found': 'Nie znaleziono oceny końcowej.',
     'Only approved final grades can be corrected': 'Korygować można tylko zatwierdzone oceny końcowe.',
     'Only the latest attempt can be corrected': 'Korygować można tylko ostatni termin studenta.',
+    'Email already in use': 'Ten adres e-mail jest już zajęty.',
+    'Album number already in use': 'Ten numer albumu jest już zajęty.',
+    'Album number is required for students': 'Podaj numer albumu studenta.',
+    'Faculty is required for this role': 'Wybierz wydział dla tej roli.',
+    'Faculty not found': 'Nie znaleziono wydziału.',
+    'User not found': 'Nie znaleziono użytkownika.',
+    'You cannot deactivate your own account': 'Nie możesz zablokować własnego konta.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 
