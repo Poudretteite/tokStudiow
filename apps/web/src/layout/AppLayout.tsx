@@ -19,7 +19,11 @@ const NAVIGATION: Record<Role, { label: string; to: string }[]> = {
         { label: 'Grupy zajęciowe', to: '/dean/groups' },
         { label: 'Studenci', to: '/dean/students' },
     ],
-    ADMIN: [{ label: 'Strona główna', to: '/' }],
+    ADMIN: [
+        { label: 'Strona główna', to: '/' },
+        { label: 'Użytkownicy', to: '/admin/users' },
+        { label: 'Dziennik zdarzeń', to: '/admin/audit' },
+    ],
 };
 
 const CONTAINER = 'mx-auto max-w-[1120px] px-4';

@@ -112,6 +112,19 @@ export function HomePage() {
                     </Panel>
                 )}
 
+                {user.role === 'ADMIN' && (
+                    <Panel title="Na skróty">
+                        <div className="flex flex-col gap-4">
+                            <Shortcut to="/admin/users" title="Użytkownicy">
+                                Zakładanie i blokowanie kont studentów, prowadzących i pracowników dziekanatu.
+                            </Shortcut>
+                            <Shortcut to="/admin/audit" title="Dziennik zdarzeń">
+                                Kto, kiedy i co zmienił w systemie.
+                            </Shortcut>
+                        </div>
+                    </Panel>
+                )}
+
                 {user.role === 'LECTURER' && (
                     <Panel title="Na skróty">
                         <Shortcut to="/teaching" title="Moje grupy">

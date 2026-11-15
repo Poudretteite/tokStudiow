@@ -12,8 +12,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -86,6 +88,47 @@ class AuditLogTest extends IntegrationTest {
     void studentCannotReadAuditLog() throws Exception {
         auditHistory("user", UUID.randomUUID().toString(), tokenFor("anna@test.pl"))
                 .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/audit-log/recent").header(AUTHORIZATION, bearer(tokenFor("anna@test.pl"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void recentEntriesArePagedNewestFirstWithCursor() throws Exception {
+        createUserViaApi("first@test.pl");
+        createUserViaApi("second@test.pl");
+        createUserViaApi("third@test.pl");
+        String adminToken = tokenFor("admin@test.pl");
+
+        String page = mvc.perform(get("/api/admin/audit-log/recent")
+                        .param("limit", "2")
+                        .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].newValue.email").value("third@test.pl"))
+                .andExpect(jsonPath("$[1].newValue.email").value("second@test.pl"))
+                .andReturn().getResponse().getContentAsString();
+
+        mvc.perform(get("/api/admin/audit-log/recent")
+                        .param("limit", "2")
+                        .param("beforeCreatedAt", com.jayway.jsonpath.JsonPath.<String>read(page, "$[1].createdAt"))
+                        .param("beforeId", com.jayway.jsonpath.JsonPath.<String>read(page, "$[1].id"))
+                        .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].newValue.email").value("first@test.pl"));
+    }
+
+    @Test
+    void recentEntriesCanBeFilteredByTypeAndActor() throws Exception {
+        createUserViaApi("jan@test.pl");
+        String adminToken = tokenFor("admin@test.pl");
+
+        mvc.perform(get("/api/admin/audit-log/recent").param("entityType", "user")
+                        .param("actorId", admin.getId().toString())
+                        .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(get("/api/admin/audit-log/recent").param("entityType", "final_grade")
+                        .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 
     // pomocnicze
