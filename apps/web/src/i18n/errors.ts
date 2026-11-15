@@ -43,6 +43,9 @@ const MESSAGES: Record<string, string> = {
     'Faculty not found': 'Nie znaleziono wydziału.',
     'User not found': 'Nie znaleziono użytkownika.',
     'You cannot deactivate your own account': 'Nie możesz zablokować własnego konta.',
+    'Student not found': 'Nie znaleziono konta studenta.',
+    'Field of study not found': 'Nie znaleziono kierunku.',
+    'Student is already enrolled in this field of study': 'Ten student studiuje już na tym kierunku.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 

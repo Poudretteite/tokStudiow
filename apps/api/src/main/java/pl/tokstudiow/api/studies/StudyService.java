@@ -80,6 +80,16 @@ public class StudyService {
         return studies.findForFaculty(myFacultyId()).stream().map(StudyResponse::from).toList();
     }
 
+    /**
+     * Konta założone przez administratora, które czekają na przypisanie kierunku.
+     * Taki student nie należy jeszcze do żadnego wydziału, więc widzi go każdy dziekanat.
+     */
+    @Transactional(readOnly = true)
+    public List<UnassignedStudentResponse> unassignedStudents() {
+        myFacultyId(); // tylko pracownik dziekanatu z przypisanym wydziałem
+        return studentProfiles.findActiveWithoutStudies().stream().map(UnassignedStudentResponse::from).toList();
+    }
+
     @Transactional
     public StudyResponse create(CreateStudyRequest request) {
         UUID facultyId = myFacultyId();
