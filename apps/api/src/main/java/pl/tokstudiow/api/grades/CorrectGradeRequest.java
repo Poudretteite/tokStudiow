@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
-/** Korekta błędnie wpisanej oceny – zawsze z uzasadnieniem, które trafia do dziennika audytu. */
+/** Korekta przez dziekanat – zawsze z komentarzem (podstawą zmiany), który trafia do audytu. */
 public record CorrectGradeRequest(
         @NotNull UUID gradeValueId,
         @NotBlank @Size(max = 500) String reason

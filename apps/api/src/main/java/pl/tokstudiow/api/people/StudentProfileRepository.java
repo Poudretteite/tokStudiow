@@ -2,7 +2,9 @@ package pl.tokstudiow.api.people;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,4 +21,7 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
             order by u.lastName, u.firstName
             """)
     List<StudentProfile> findActiveWithoutStudies();
+
+    @Query("select p.albumNumber from StudentProfile p where p.albumNumber in :albumNumbers")
+    List<String> findExistingAlbumNumbers(@Param("albumNumbers") Collection<String> albumNumbers);
 }

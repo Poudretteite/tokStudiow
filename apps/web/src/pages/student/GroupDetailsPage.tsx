@@ -46,6 +46,8 @@ export function GroupDetailsPage() {
                             />
                             <InfoRow label="Prowadzący" value={`${group.lecturerFirstName} ${group.lecturerLastName}`} />
                             <InfoRow label="Semestr" value={group.academicTermName} />
+                            <InfoRow label="Koniec sesji" value={formatDate(group.examSessionEnd)} />
+                            <InfoRow label="Koniec sesji poprawkowej" value={formatDate(group.retakeSessionEnd)} />
                             </tbody>
                         </Table>
                     </Panel>

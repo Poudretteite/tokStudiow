@@ -10,7 +10,10 @@ import { Dialog } from '../../components/ui/Dialog';
 import { Table, Td, Th, Tr } from '../../components/ui/Table';
 import { TextField } from '../../components/ui/TextField';
 import { errorMessage } from '../../i18n/errors';
+import { formatDate } from '../../i18n/format';
 import { gradeHint, parseGrade } from '../../i18n/grades';
+import { splitAttempts } from '../../lib/attempts';
+import { lecturerMayCorrect, partialGradeDeadline, sessionSummary } from '../../lib/corrections';
 
 export function Gradebook({ group }: { group: ClassGroup }) {
     const groupId = encodeURIComponent(group.id);
@@ -42,6 +45,7 @@ export function Gradebook({ group }: { group: ClassGroup }) {
                                 {(gradeList) =>
                                     scales.data ? (
                                         <GradeTable
+                                            group={group}
                                             groupId={groupId}
                                             students={students}
                                             items={itemList}
@@ -76,6 +80,7 @@ export function Gradebook({ group }: { group: ClassGroup }) {
 // tabela: wpisywanie całej kolumny i korekta pojedynczej oceny
 
 interface GradeTableProps {
+    group: ClassGroup;
     groupId: string;
     students: RosterEntry[];
     items: AssessmentItem[];
@@ -90,7 +95,7 @@ interface CorrectionTarget {
     grade: PartialGrade;
 }
 
-function GradeTable({ groupId, students, items, grades, scales, gradesKey }: GradeTableProps) {
+function GradeTable({ group, groupId, students, items, grades, scales, gradesKey }: GradeTableProps) {
     const queryClient = useQueryClient();
     const [activeItemId, setActiveItemId] = useState<string | null>(null);
     const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -98,6 +103,9 @@ function GradeTable({ groupId, students, items, grades, scales, gradesKey }: Gra
     const [correction, setCorrection] = useState<CorrectionTarget | null>(null);
     const inputs = useRef<(HTMLInputElement | null)[]>([]);
     const saveButton = useRef<HTMLButtonElement>(null);
+    // termin korekty zależy od tego, czy ocenę wpisano w sesji, czy w sesji poprawkowej
+    const canCorrect = (grade: PartialGrade) => lecturerMayCorrect(partialGradeDeadline(group, grade.issuedAt));
+    const someLocked = grades.some((g) => !canCorrect(g));
 
     // Każdy element ma własną skalę: ocena 2,0–5,0 albo zal/nzal
     const scaleOf = (item: AssessmentItem) => scales.find((s) => s.id === item.gradingScaleId)!;
@@ -235,29 +243,44 @@ function GradeTable({ groupId, students, items, grades, scales, gradesKey }: Gra
                                     <div className="text-xs text-muted">{student.albumNumber}</div>
                                 </Td>
                                 {items.map((item) => {
-                                    const attempts = attemptsFor(student.enrollmentId, item.id);
-                                    const current = attempts.at(-1);
+                                    const { current, earlier } = splitAttempts(attemptsFor(student.enrollmentId, item.id));
 
-                                    // Kolumna w trybie przeglądania: ocenę można kliknąć, żeby skorygować błędny wpis
+                                    // Tryb przeglądania: wcześniejsze próby (poprawy) jako oceny, ostatnia się liczy.
+                                    // W terminie korekt ostatnią ocenę można kliknąć, żeby poprawić pomyłkę.
                                     if (item.id !== activeItemId) {
+                                        const label = current && (
+                                            <span className={`font-semibold ${current.passing ? '' : 'text-red-700'}`}>
+                                                {current.gradeLabel}
+                                            </span>
+                                        );
                                         return (
                                             <Td key={item.id}>
                                                 {current ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCorrection({ student, item, grade: current })}
-                                                        disabled={activeItemId !== null}
-                                                        aria-label={`Korekta oceny ${current.gradeLabel}: ${student.firstName} ${student.lastName}, ${item.name}`}
-                                                        title="Kliknij, aby skorygować błędnie wpisaną ocenę"
-                                                        className="cursor-pointer rounded-sm px-1 underline decoration-line decoration-dotted underline-offset-4 hover:bg-page hover:decoration-navy focus-visible:outline-2 focus-visible:outline-navy disabled:cursor-default disabled:no-underline disabled:hover:bg-transparent"
-                                                    >
-                              <span className={`font-semibold ${current.passing ? '' : 'text-red-700'}`}>
-                                {current.gradeLabel}
-                              </span>
-                                                        {attempts.length > 1 && (
-                                                            <span className="ml-1 text-xs text-muted">({attempts.length} próby)</span>
+                                                    <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                                                        {earlier.map((g) => (
+                                                            <span
+                                                                key={g.id}
+                                                                title={`Próba ${g.attempt}`}
+                                                                className={`text-sm ${g.passing ? 'text-muted' : 'text-red-700/70'}`}
+                                                            >
+                                                                {g.gradeLabel} →
+                                                            </span>
+                                                        ))}
+                                                        {canCorrect(current) ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setCorrection({ student, item, grade: current })}
+                                                                disabled={activeItemId !== null}
+                                                                aria-label={`Popraw pomyłkę w ocenie ${current.gradeLabel}: ${student.firstName} ${student.lastName}, ${item.name}`}
+                                                                title="Kliknij, aby poprawić błędnie wpisaną ocenę"
+                                                                className="cursor-pointer rounded-sm px-1 underline decoration-line decoration-dotted underline-offset-4 hover:bg-page hover:decoration-navy focus-visible:outline-2 focus-visible:outline-navy disabled:cursor-default disabled:no-underline disabled:hover:bg-transparent"
+                                                            >
+                                                                {label}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="px-1">{label}</span>
                                                         )}
-                                                    </button>
+                                                    </span>
                                                 ) : (
                                                     <span className="text-muted">–</span>
                                                 )}
@@ -303,8 +326,10 @@ function GradeTable({ groupId, students, items, grades, scales, gradesKey }: Gra
 
                     {!activeItem && (
                         <p className="border-t border-line px-4 py-2 text-sm text-muted">
-                            Pomyłka przy wpisywaniu? Kliknij ocenę, aby ją skorygować. Ocenę z poprawy zaliczenia wpisz przez „Wpisz
-                            oceny”.
+                            Pomyłka przy wpisywaniu? Kliknij podkreśloną ocenę, aby ją poprawić.
+                            {someLocked && ' Ocen bez podkreślenia nie poprawisz już sam – termin minął, zmiany wprowadza dziekanat.'}{' '}
+                            {sessionSummary(group, true)} Ocenę z poprawy zaliczenia wpisz przez „Wpisz oceny”, a pojawi się obok
+                            poprzedniej.
                         </p>
                     )}
 
@@ -350,11 +375,12 @@ function GradeTable({ groupId, students, items, grades, scales, gradesKey }: Gra
             {correction && (
                 <CorrectionDialog
                     groupId={groupId}
+                    deadline={partialGradeDeadline(group, correction.grade.issuedAt)}
                     target={correction}
                     scale={scaleOf(correction.item)}
                     gradesKey={gradesKey}
                     onClose={() => setCorrection(null)}
-                    onCorrected={(label) => setNotice(`Skorygowano ocenę na ${label}.`)}
+                    onCorrected={(label) => setNotice(`Poprawiono ocenę na ${label}.`)}
                 />
             )}
         </>
@@ -365,6 +391,7 @@ function GradeTable({ groupId, students, items, grades, scales, gradesKey }: Gra
 
 function CorrectionDialog({
                               groupId,
+                              deadline,
                               target,
                               scale,
                               gradesKey,
@@ -372,6 +399,7 @@ function CorrectionDialog({
                               onCorrected,
                           }: {
     groupId: string;
+    deadline: string;
     target: CorrectionTarget;
     scale: GradingScale;
     gradesKey: string[];
@@ -380,7 +408,6 @@ function CorrectionDialog({
 }) {
     const queryClient = useQueryClient();
     const [text, setText] = useState('');
-    const [reason, setReason] = useState('');
     const value = parseGrade(text, scale);
     const unchanged = value?.label === target.grade.gradeLabel;
 
@@ -388,7 +415,7 @@ function CorrectionDialog({
         mutationFn: () =>
             api(`/api/lecturer/groups/${groupId}/partial-grades/${encodeURIComponent(target.grade.id)}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ gradeValueId: value!.id, reason: reason.trim() }),
+                body: JSON.stringify({ gradeValueId: value!.id }),
             }),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: gradesKey });
@@ -403,7 +430,7 @@ function CorrectionDialog({
     }
 
     return (
-        <Dialog open onClose={onClose} title="Korekta błędnie wpisanej oceny">
+        <Dialog open onClose={onClose} title="Poprawa błędnie wpisanej oceny">
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <p>
                     <strong>
@@ -438,19 +465,11 @@ function CorrectionDialog({
                     </p>
                 </div>
 
-                <TextField
-                    label="Powód korekty"
-                    required
-                    maxLength={500}
-                    placeholder="np. pomyłka przy wpisywaniu"
-                    value={reason}
-                    onChange={(e) => setReason(e.currentTarget.value)}
-                />
-
                 <p className="text-sm text-muted">
-                    Korekta zastępuje błędną ocenę: student zobaczy tylko prawidłową wartość, bez wpisu w historii ocen. Zmiana
-                    z powodem trafia wyłącznie do dziennika audytu, widocznego dla administratora. Jeśli student poprawiał
-                    zaliczenie, nie używaj korekty: wpisz nową ocenę przez „Wpisz oceny”, a zostanie zapisana jako kolejna próba.
+                    Poprawka zastępuje błędną ocenę: student zobaczy tylko prawidłową wartość. Powodu nie trzeba podawać –
+                    dziennik audytu zapisze, kto i kiedy zmienił ocenę. Pomyłki poprawiasz sam do {formatDate(deadline)},
+                    później tylko dziekanat. Jeśli student poprawiał zaliczenie, wpisz nową ocenę przez „Wpisz oceny” –
+                    zostanie zapisana jako kolejna próba.
                 </p>
 
                 {unchanged && <Alert>To ta sama ocena, która jest już wpisana.</Alert>}
@@ -460,8 +479,8 @@ function CorrectionDialog({
                     <Button type="button" variant="secondary" onClick={onClose}>
                         Anuluj
                     </Button>
-                    <Button type="submit" loading={correct.isPending} disabled={!value || unchanged || !reason.trim()}>
-                        Zapisz korektę
+                    <Button type="submit" loading={correct.isPending} disabled={!value || unchanged}>
+                        Zapisz poprawkę
                     </Button>
                 </div>
             </form>

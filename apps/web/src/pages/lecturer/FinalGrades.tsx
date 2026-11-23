@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { api } from '../../api/client';
-import type { ClassGroup, FinalGradeSheetRow, GradeValue, GradingScale } from '../../api/types';
+import type { ClassGroup, FinalGrade, FinalGradeSheetRow, GradeValue, GradingScale } from '../../api/types';
 import { Panel } from '../../components/Panel';
 import { QueryState } from '../../components/QueryState';
 import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { Table, Td, Th, Tr } from '../../components/ui/Table';
+import { TextField } from '../../components/ui/TextField';
 import { errorMessage } from '../../i18n/errors';
-import { formatAverage } from '../../i18n/format';
+import { formatAverage, formatDate } from '../../i18n/format';
 import { gradeHint, parseGrade } from '../../i18n/grades';
 import { ATTEMPT_LABELS } from '../../i18n/labels';
+import { finalGradeDeadline, lecturerMayCorrect, type SessionDates } from '../../lib/corrections';
 
 export function FinalGrades({ group }: { group: ClassGroup }) {
     const groupId = encodeURIComponent(group.id);
@@ -26,13 +28,24 @@ export function FinalGrades({ group }: { group: ClassGroup }) {
 
     return (
         <QueryState query={sheet}>
-            {(rows) => (scale ? <FinalGradeSheet groupId={groupId} rows={rows} scale={scale} sheetKey={sheetKey} /> : null)}
+            {(rows) =>
+                scale ? (
+                    <FinalGradeSheet
+                        groupId={groupId}
+                        dates={group}
+                        rows={rows}
+                        scale={scale}
+                        sheetKey={sheetKey}
+                    />
+                ) : null
+            }
         </QueryState>
     );
 }
 
 interface SheetProps {
     groupId: string;
+    dates: SessionDates;
     rows: FinalGradeSheetRow[];
     scale: GradingScale;
     sheetKey: string[];
@@ -42,11 +55,14 @@ interface SheetProps {
  * Cała grupa na jednym ekranie: propozycja jest od razu wpisana jako ocena,
  * prowadzący poprawia tylko wyjątki i zatwierdza wszystko jednym przyciskiem.
  */
-function FinalGradeSheet({ groupId, rows, scale, sheetKey }: SheetProps) {
+function FinalGradeSheet({ groupId, dates, rows, scale, sheetKey }: SheetProps) {
     const queryClient = useQueryClient();
     const [edits, setEdits] = useState<Record<string, string>>({});
     const [confirming, setConfirming] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
+    const [correcting, setCorrecting] = useState<{ row: FinalGradeSheetRow; grade: FinalGrade } | null>(null);
+    // I termin poprawia się do końca sesji + 2 dni, poprawkę i komisję do końca sesji poprawkowej + 2 dni
+    const canCorrect = (grade: FinalGrade) => lecturerMayCorrect(finalGradeDeadline(dates, grade.attempt));
     const inputs = useRef<(HTMLInputElement | null)[]>([]);
     const approveButton = useRef<HTMLButtonElement>(null);
 
@@ -137,6 +153,23 @@ function FinalGradeSheet({ groupId, rows, scale, sheetKey }: SheetProps) {
                         const approved = row.grades.filter((g) => g.status === 'APPROVED');
                         const earlier = row.openAttempt === null ? approved.slice(0, -1) : approved;
                         const settled = row.openAttempt === null ? approved.at(-1) : undefined;
+                        // poprawić można tylko ostatni termin, i tylko gdy nie ma już po nim szkicu
+                        const last = row.grades.at(-1);
+                        const correctable = last?.status === 'APPROVED' && canCorrect(last) ? last : undefined;
+                        const fixLink = (g: FinalGrade) =>
+                            correctable?.id === g.id && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setNotice(null);
+                                        setCorrecting({ row, grade: g });
+                                    }}
+                                    aria-label={`Popraw ocenę ${g.gradeLabel}: ${row.studentFirstName} ${row.studentLastName}`}
+                                    className="ml-2 text-xs font-semibold text-navy underline underline-offset-2"
+                                >
+                                    popraw
+                                </button>
+                            );
 
                         return (
                             <Tr key={row.enrollmentId}>
@@ -154,6 +187,7 @@ function FinalGradeSheet({ groupId, rows, scale, sheetKey }: SheetProps) {
                                             <div key={g.id}>
                                                 {ATTEMPT_LABELS[g.attempt]}:{' '}
                                                 <span className={g.passing ? '' : 'text-red-700'}>{g.gradeLabel}</span>
+                                                {fixLink(g)}
                                             </div>
                                         ))
                                     )}
@@ -164,6 +198,7 @@ function FinalGradeSheet({ groupId, rows, scale, sheetKey }: SheetProps) {
                                                 <span className={`font-semibold ${settled.passing ? '' : 'text-red-700'}`}>
                                                     {settled.gradeLabel}
                                                 </span>
+                                            {fixLink(settled)}
                                             <div className="text-xs text-muted">
                                                 zatwierdzona ({ATTEMPT_LABELS[settled.attempt]})
                                             </div>
@@ -207,6 +242,23 @@ function FinalGradeSheet({ groupId, rows, scale, sheetKey }: SheetProps) {
                     </div>
                 )}
             </Panel>
+
+            {correcting && (
+                <FinalCorrectionDialog
+                    groupId={groupId}
+                    deadline={finalGradeDeadline(dates, correcting.grade.attempt)}
+                    scale={scale}
+                    row={correcting.row}
+                    grade={correcting.grade}
+                    sheetKey={sheetKey}
+                    onClose={() => setCorrecting(null)}
+                    onCorrected={(label) =>
+                        setNotice(
+                            `Poprawiono ocenę: ${correcting.row.studentFirstName} ${correcting.row.studentLastName}, ${label}.`,
+                        )
+                    }
+                />
+            )}
 
             {confirming && (
                 <Dialog open onClose={() => setConfirming(false)} title="Zatwierdzenie ocen końcowych">
@@ -287,5 +339,101 @@ function GradeInput({ row, value, text, numeric, inputRef, onChange, onKeyDown }
             )}
             {differsFromProposal && <span className="text-xs text-amber-700">inna niż propozycja</span>}
         </div>
+    );
+}
+
+/** Poprawa pomyłki w zatwierdzonej ocenie, w terminie korekt; powód nieobowiązkowy. */
+function FinalCorrectionDialog({
+    groupId,
+    deadline,
+    scale,
+    row,
+    grade,
+    sheetKey,
+    onClose,
+    onCorrected,
+}: {
+    groupId: string;
+    deadline: string;
+    scale: GradingScale;
+    row: FinalGradeSheetRow;
+    grade: FinalGrade;
+    sheetKey: string[];
+    onClose: () => void;
+    onCorrected: (label: string) => void;
+}) {
+    const queryClient = useQueryClient();
+    const [text, setText] = useState('');
+    const value = parseGrade(text, scale);
+    const unchanged = value?.label === grade.gradeLabel;
+
+    const correct = useMutation({
+        mutationFn: () =>
+            api(`/api/lecturer/groups/${groupId}/final-grades/${encodeURIComponent(grade.id)}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ gradeValueId: value!.id }),
+            }),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: sheetKey });
+            onCorrected(value!.label);
+            onClose();
+        },
+    });
+
+    function handleSubmit(event: FormEvent) {
+        event.preventDefault();
+        correct.mutate();
+    }
+
+    return (
+        <Dialog open onClose={onClose} title="Poprawa zatwierdzonej oceny">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <p>
+                    <strong>
+                        {row.studentFirstName} {row.studentLastName}
+                    </strong>{' '}
+                    ({row.albumNumber}), {ATTEMPT_LABELS[grade.attempt]}
+                    <br />
+                    Zatwierdzona ocena: <strong>{grade.gradeLabel}</strong>
+                </p>
+                <div>
+                    <TextField
+                        label="Prawidłowa ocena"
+                        required
+                        autoFocus
+                        autoComplete="off"
+                        inputMode={scale.type === 'NUMERIC' ? 'decimal' : 'text'}
+                        value={text}
+                        onChange={(e) => setText(e.currentTarget.value)}
+                    />
+                    <p className="mt-1 text-sm text-muted">
+                        {value ? (
+                            <>
+                                Zostanie zapisane: <strong className="text-ink">{value.label}</strong>
+                            </>
+                        ) : value === null ? (
+                            <span className="text-red-700">Nie ma takiej oceny w skali. Dozwolone: {gradeHint(scale)}.</span>
+                        ) : (
+                            <>Dozwolone: {gradeHint(scale)}</>
+                        )}
+                    </p>
+                </div>
+                <p className="text-sm text-muted">
+                    Poprawka zmienia ocenę w indeksie studenta. Powodu nie trzeba podawać – dziennik audytu zapisze, kto i kiedy
+                    zmienił ocenę. Możesz ją wprowadzić do {formatDate(deadline)}; później zatwierdzone oceny zmienia już tylko
+                    dziekanat.
+                </p>
+                {unchanged && <Alert>To ta sama ocena, która jest już zatwierdzona.</Alert>}
+                {correct.isError && <Alert>{errorMessage(correct.error)}</Alert>}
+                <div className="flex justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>
+                        Anuluj
+                    </Button>
+                    <Button type="submit" loading={correct.isPending} disabled={!value || unchanged}>
+                        Zapisz poprawkę
+                    </Button>
+                </div>
+            </form>
+        </Dialog>
     );
 }

@@ -42,27 +42,50 @@ class ProfileTest extends IntegrationTest {
     }
 
     @Test
-    void studentSeesOwnAlbumNumber() throws Exception {
+    void studentGetsGeneratedUniversityEmailAndSeesOwnAlbumNumber() throws Exception {
+        // Jan Kowalski, album 123456 → jk123456@tokstudiow.pl; adres podany w żądaniu jest pomijany
         createUser("""
                 "email": "anna@test.pl", "role": "STUDENT", "albumNumber": "123456"
                 """)
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("jk123456@tokstudiow.pl"))
                 .andExpect(jsonPath("$.albumNumber").value("123456"));
 
-        mvc.perform(get("/api/me").header(AUTHORIZATION, bearer(tokenFor("anna@test.pl"))))
+        login("anna@test.pl", PASSWORD).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/me").header(AUTHORIZATION, bearer(tokenFor("jk123456@tokstudiow.pl"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("STUDENT"))
                 .andExpect(jsonPath("$.albumNumber").value("123456"));
     }
 
     @Test
+    void studentNeedsNoEmailInRequest() throws Exception {
+        createUser("""
+                "role": "STUDENT", "albumNumber": "2001"
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("jk2001@tokstudiow.pl"));
+    }
+
+    @Test
     void duplicateAlbumNumberIsRejected() throws Exception {
         createUser("""
-                "email": "anna@test.pl", "role": "STUDENT", "albumNumber": "123456"
+                "role": "STUDENT", "albumNumber": "123456"
                 """).andExpect(status().isCreated());
 
         createUser("""
-                "email": "jan@test.pl", "role": "STUDENT", "albumNumber": "123456"
+                "role": "STUDENT", "albumNumber": "123456"
+                """).andExpect(status().isConflict());
+    }
+
+    @Test
+    void generatedEmailTakenByAnotherAccountIsRejected() throws Exception {
+        createUser("""
+                "email": "jk3001@tokstudiow.pl", "role": "ADMIN"
+                """).andExpect(status().isCreated());
+
+        createUser("""
+                "role": "STUDENT", "albumNumber": "3001"
                 """).andExpect(status().isConflict());
     }
 
@@ -74,6 +97,13 @@ class ProfileTest extends IntegrationTest {
     }
 
     // prowadzący i dziekanat
+
+    @Test
+    void lecturerRequiresEmail() throws Exception {
+        createUser("""
+                "role": "LECTURER", "facultyId": "%s"
+                """.formatted(facultyId)).andExpect(status().isBadRequest());
+    }
 
     @Test
     void lecturerRequiresFaculty() throws Exception {

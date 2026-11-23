@@ -16,6 +16,7 @@ import { TextField } from '../../components/ui/TextField';
 import { errorMessage } from '../../i18n/errors';
 import { formatInstant } from '../../i18n/format';
 import { ROLE_LABELS } from '../../i18n/labels';
+import { studentEmail } from '../../lib/studentImport';
 
 const USERS_KEY = ['admin', 'users'];
 const ROLES = Object.keys(ROLE_LABELS) as Role[];
@@ -172,6 +173,12 @@ function NewUserForm({ faculties }: { faculties: Faculty[] }) {
     const [copied, setCopied] = useState(false);
 
     const needsFaculty = role === 'LECTURER' || role === 'DEAN_OFFICE';
+    const isStudent = role === 'STUDENT';
+    // student dostaje adres uczelniany automatycznie – podgląd tego, co utworzy serwer
+    const generatedEmail =
+        isStudent && firstName.trim() && lastName.trim() && albumNumber.trim()
+            ? studentEmail(firstName, lastName, albumNumber)
+            : null;
 
     const create = useMutation({
         mutationFn: () =>
@@ -180,17 +187,17 @@ function NewUserForm({ faculties }: { faculties: Faculty[] }) {
                 body: JSON.stringify({
                     firstName,
                     lastName,
-                    email,
+                    email: isStudent ? null : email,
                     role,
                     password,
-                    albumNumber: role === 'STUDENT' ? albumNumber : null,
+                    albumNumber: isStudent ? albumNumber : null,
                     facultyId: needsFaculty ? facultyId : null,
                     academicTitle: role === 'LECTURER' && academicTitle ? academicTitle : null,
                 }),
             }),
-        onSuccess: async () => {
+        onSuccess: async (user) => {
             await queryClient.invalidateQueries({ queryKey: USERS_KEY });
-            setCreated({ email, password });
+            setCreated({ email: user.email, password });
             setCopied(false);
             setFirstName('');
             setLastName('');
@@ -229,23 +236,34 @@ function NewUserForm({ faculties }: { faculties: Faculty[] }) {
                     </Select>
                     <TextField label="Imię" required maxLength={100} value={firstName} onChange={(e) => setFirstName(e.currentTarget.value)} />
                     <TextField label="Nazwisko" required maxLength={100} value={lastName} onChange={(e) => setLastName(e.currentTarget.value)} />
-                    <TextField
-                        label="Adres e-mail"
-                        type="email"
-                        required
-                        maxLength={255}
-                        autoComplete="off"
-                        value={email}
-                        onChange={(e) => setEmail(e.currentTarget.value)}
-                    />
-                    {role === 'STUDENT' && (
+                    {isStudent ? (
+                        <>
+                            <TextField
+                                label="Numer albumu"
+                                required
+                                maxLength={20}
+                                pattern="[0-9A-Za-z/\-]{1,20}"
+                                value={albumNumber}
+                                onChange={(e) => setAlbumNumber(e.currentTarget.value)}
+                            />
+                            <div>
+                                <span className="mb-1 block text-sm font-semibold">E-mail (login)</span>
+                                <p className="rounded-sm border border-dashed border-line px-3 py-2 text-[15px]" aria-live="polite">
+                                    {generatedEmail ?? (
+                                        <span className="text-muted">utworzy się z inicjałów i numeru albumu</span>
+                                    )}
+                                </p>
+                            </div>
+                        </>
+                    ) : (
                         <TextField
-                            label="Numer albumu"
+                            label="Adres e-mail"
+                            type="email"
                             required
-                            maxLength={20}
-                            pattern="[0-9A-Za-z/\-]{1,20}"
-                            value={albumNumber}
-                            onChange={(e) => setAlbumNumber(e.currentTarget.value)}
+                            maxLength={255}
+                            autoComplete="off"
+                            value={email}
+                            onChange={(e) => setEmail(e.currentTarget.value)}
                         />
                     )}
                     {needsFaculty && (

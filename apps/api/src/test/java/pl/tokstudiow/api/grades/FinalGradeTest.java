@@ -8,15 +8,20 @@ import org.springframework.test.web.servlet.ResultActions;
 import pl.tokstudiow.api.IntegrationTest;
 import pl.tokstudiow.api.groups.ClassGroup;
 import pl.tokstudiow.api.groups.GroupEnrollment;
+import pl.tokstudiow.api.studies.Study;
 import pl.tokstudiow.api.university.*;
 import pl.tokstudiow.api.user.Role;
 import pl.tokstudiow.api.user.User;
+
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,6 +30,10 @@ import static org.hamcrest.Matchers.contains;
 class FinalGradeTest extends IntegrationTest {
 
     private Faculty faculty;
+    private CourseComponent lab;
+    private User lecturer;
+    private Study annaStudy;
+    private Study janStudy;
     private ClassGroup group;
     private GroupEnrollment anna;
     private GroupEnrollment jan;
@@ -39,16 +48,18 @@ class FinalGradeTest extends IntegrationTest {
     void setUp() throws Exception {
         faculty = fixtures.faculty("Wydział Nauk Ścisłych i Technicznych", "WNŚiT");
         FieldOfStudy field = fixtures.fieldOfStudy(faculty, "Informatyka");
-        CourseComponent lab = fixtures.courseComponent(field, "INF-BD", ComponentType.LAB, GradingScaleType.NUMERIC);
+        lab = fixtures.courseComponent(field, "INF-BD", ComponentType.LAB, GradingScaleType.NUMERIC);
         AcademicTerm term = fixtures.term();
 
-        User lecturer = fixtures.lecturer("piotr@test.pl", faculty);
+        lecturer = fixtures.lecturer("piotr@test.pl", faculty);
         fixtures.lecturer("marek@test.pl", faculty);
         lecturerId = lecturer.getId().toString();
 
         group = fixtures.group(lab, term, lecturer, 1);
-        anna = fixtures.enroll(group, fixtures.student("anna@test.pl", "1001", field));
-        jan = fixtures.enroll(group, fixtures.student("jan@test.pl", "1002", field));
+        annaStudy = fixtures.student("anna@test.pl", "1001", field);
+        anna = fixtures.enroll(group, annaStudy);
+        janStudy = fixtures.student("jan@test.pl", "1002", field);
+        jan = fixtures.enroll(group, janStudy);
 
         lecturerToken = tokenFor("piotr@test.pl");
         otherLecturerToken = tokenFor("marek@test.pl");
@@ -276,6 +287,71 @@ class FinalGradeTest extends IntegrationTest {
         correct(tokenFor("dziekanat.wm@test.pl"), id, "5,0", "chcę zmienić").andExpect(status().isNotFound());
     }
 
+    // prowadzący: korekta zatwierdzonej oceny do końca sesji + 2 dni
+
+    @Test
+    void lecturerCorrectsApprovedGradeWithinCorrectionPeriodWithoutReason() throws Exception {
+        String id = approvedId(anna, "4,0");
+
+        lecturerCorrect(group, id, "4,5")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gradeLabel").value("4,5"))
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.approvedBy").value(lecturerId));
+        transcript(annaToken).andExpect(jsonPath("$[0].entries[0].gradeLabel").value("4,5"));
+    }
+
+    @Test
+    void lecturerCannotCorrectApprovedGradeAfterCorrectionPeriodButDeanOfficeCan() throws Exception {
+        ClassGroup late = fixtures.group(lab, fixtures.termWithSessionEnd("Semestr po sesji",
+                LocalDate.now(ZoneId.of("Europe/Warsaw")).minusDays(3)), lecturer, 1);
+        GroupEnrollment enrollment = fixtures.enroll(late, annaStudy);
+        String id = JsonPath.read(mvc.perform(post("/api/lecturer/groups/{id}/final-grades/approvals", late.getId())
+                        .header(AUTHORIZATION, bearer(lecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"entries\": [" + entry(enrollment, "3,0") + "]}"))
+                .andReturn().getResponse().getContentAsString(), "$[0].id");
+
+        lecturerCorrect(late, id, "4,0").andExpect(status().isConflict());
+        correct(deanToken(), id, "4,0", "Wniosek prowadzącego").andExpect(status().isOk());
+    }
+
+    @Test
+    void retakeGradeFollowsRetakeSessionDeadlineWhileFirstAttemptIsLocked() throws Exception {
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/Warsaw"));
+        ClassGroup late = fixtures.group(lab, fixtures.termWithSessions("Semestr z poprawkową",
+                today.minusDays(10), today.plusDays(5)), lecturer, 1);
+        GroupEnrollment annaLate = fixtures.enroll(late, annaStudy);
+        GroupEnrollment janLate = fixtures.enroll(late, janStudy);
+
+        String annaFirst = JsonPath.read(approveIn(late, entry(annaLate, "4,0"), entry(janLate, "2,0")), "$[0].id");
+        String janRetake = JsonPath.read(approveIn(late, entry(janLate, "3,0")), "$[0].id");
+
+        lecturerCorrect(late, annaFirst, "4,5").andExpect(status().isConflict());    // I termin: sesja minęła
+        lecturerCorrect(late, janRetake, "3,5")                                        // poprawka: poprawkowa trwa
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attempt").value("SECOND"))
+                .andExpect(jsonPath("$.gradeLabel").value("3,5"));
+    }
+
+    @Test
+    void lecturerCorrectionAppliesOnlyToOwnApprovedLatestAttempt() throws Exception {
+        String draft = idOf(saveDraft(anna, "FIRST", "4,0"));
+        lecturerCorrect(group, draft, "4,5").andExpect(status().isConflict());
+
+        String first = approvedId(jan, "2,0");
+        approveBatch(entry(jan, "3,0"));
+        lecturerCorrect(group, first, "3,0").andExpect(status().isConflict());
+
+        mvc.perform(patch("/api/lecturer/groups/{g}/final-grades/{id}", group.getId(), first)
+                        .header(AUTHORIZATION, bearer(otherLecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"gradeValueId": "%s"}
+                                """.formatted(numeric("5,0"))))
+                .andExpect(status().isNotFound());
+    }
+
     // ataki
 
     @Test
@@ -340,6 +416,24 @@ class FinalGradeTest extends IntegrationTest {
     private String approvedId(GroupEnrollment enrollment, String label) throws Exception {
         return JsonPath.read(approveBatch(entry(enrollment, label))
                 .andReturn().getResponse().getContentAsString(), "$[0].id");
+    }
+
+    /** Zatwierdzenie ocen w innej grupie niż główna; zwraca treść odpowiedzi. */
+    private String approveIn(ClassGroup g, String... entries) throws Exception {
+        return mvc.perform(post("/api/lecturer/groups/{id}/final-grades/approvals", g.getId())
+                        .header(AUTHORIZATION, bearer(lecturerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"entries\": [" + String.join(", ", entries) + "]}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    /** Korekta prowadzącego: tylko nowa wartość, bez powodu. */
+    private ResultActions lecturerCorrect(ClassGroup g, String finalGradeId, String label) throws Exception {
+        return mvc.perform(patch("/api/lecturer/groups/{g}/final-grades/{id}", g.getId(), finalGradeId)
+                .header(AUTHORIZATION, bearer(lecturerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"gradeValueId\": \"%s\"}".formatted(numeric(label))));
     }
 
     private ResultActions correct(String token, String finalGradeId, String label, String reason) throws Exception {

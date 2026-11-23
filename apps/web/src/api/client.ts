@@ -1,3 +1,5 @@
+import type { RowError } from './types';
+
 /**
  * Token dostępu żyje wyłącznie w pamięci tego modułu – nie w localStorage,
  * więc skrypt wstrzyknięty przez XSS nie znajdzie go w przeglądarce.
@@ -13,10 +15,13 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 export class ApiError extends Error {
     readonly status: number;
+    /** błędy poszczególnych wierszy przy operacjach na wielu rekordach (np. imporcie) */
+    readonly rows: RowError[];
 
-    constructor(status: number, message: string) {
+    constructor(status: number, message: string, rows: RowError[] = []) {
         super(message);
         this.status = status;
+        this.rows = rows;
     }
 }
 
@@ -74,7 +79,8 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
         onSessionExpired?.();
     }
     if (!response.ok) {
-        throw new ApiError(response.status, await errorDetail(response));
+        const { detail, rows } = await errorBody(response);
+        throw new ApiError(response.status, detail, rows);
     }
     if (response.status === 204) {
         return undefined as T;
@@ -82,11 +88,11 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
     return response.json() as Promise<T>;
 }
 
-async function errorDetail(response: Response): Promise<string> {
+async function errorBody(response: Response): Promise<{ detail: string; rows: RowError[] }> {
     try {
         const body = await response.json();
-        return body.detail ?? response.statusText;
+        return { detail: body.detail ?? response.statusText, rows: Array.isArray(body.rows) ? body.rows : [] };
     } catch {
-        return response.statusText;
+        return { detail: response.statusText, rows: [] };
     }
 }

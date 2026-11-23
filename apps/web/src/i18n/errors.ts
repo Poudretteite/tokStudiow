@@ -36,7 +36,8 @@ const MESSAGES: Record<string, string> = {
     'Final grade not found': 'Nie znaleziono oceny końcowej.',
     'Only approved final grades can be corrected': 'Korygować można tylko zatwierdzone oceny końcowe.',
     'Only the latest attempt can be corrected': 'Korygować można tylko ostatni termin studenta.',
-    'Email already in use': 'Ten adres e-mail jest już zajęty.',
+    'Email already in use': 'Ten adres e-mail (login) jest już zajęty przez inne konto.',
+    'Email is required for this role': 'Podaj adres e-mail – tylko studenci dostają go automatycznie.',
     'Album number already in use': 'Ten numer albumu jest już zajęty.',
     'Album number is required for students': 'Podaj numer albumu studenta.',
     'Faculty is required for this role': 'Wybierz wydział dla tej roli.',
@@ -46,8 +47,20 @@ const MESSAGES: Record<string, string> = {
     'Student not found': 'Nie znaleziono konta studenta.',
     'Field of study not found': 'Nie znaleziono kierunku.',
     'Student is already enrolled in this field of study': 'Ten student studiuje już na tym kierunku.',
+    'Correction period has ended':
+        'Termin poprawiania ocen minął (koniec sesji + 2 dni). Ocenę może teraz poprawić tylko dziekanat.',
+    'Exam session must end within the academic term': 'Koniec sesji musi mieścić się w semestrze.',
+    'Choose exactly one change: promotion or status': 'Wybierz jedną zmianę: przeniesienie na semestr albo status.',
+    'Some rows cannot be imported': 'Nie zaimportowano nikogo – popraw wiersze zaznaczone na czerwono.',
+    'Duplicate email in import': 'Inny wiersz w pliku daje ten sam login (e-mail).',
+    'Duplicate album number in import': 'Ten sam numer albumu jest w pliku więcej niż raz.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
+
+/** Komunikat z serwera (np. błąd jednego wiersza importu) po polsku; nieznany – bez zmian. */
+export function messageText(message: string): string {
+    return MESSAGES[message] ?? message;
+}
 
 /** Komunikat dla użytkownika: znany błąd po polsku, inne – ogólny opis bez szczegółów technicznych. */
 export function errorMessage(error: unknown): string {

@@ -2,6 +2,7 @@ package pl.tokstudiow.api;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -22,7 +23,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 /**
  * Baza testów integracyjnych: prawdziwy PostgreSQL w kontenerze,
  * czysta baza przed każdym testem i wspólne metody pomocnicze.
+ * Tag „integration” odróżnia je od testów jednostkowych (./gradlew unitTest).
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import({TestcontainersConfiguration.class, TestFixtures.class})

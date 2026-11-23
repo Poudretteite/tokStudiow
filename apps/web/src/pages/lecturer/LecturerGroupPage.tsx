@@ -5,6 +5,7 @@ import type { ClassGroup } from '../../api/types';
 import { PageHeader } from '../../components/PageHeader';
 import { Tabs } from '../../components/ui/Tabs';
 import { COMPONENT_LABELS } from '../../i18n/labels';
+import { sessionSummary } from '../../lib/corrections';
 import { Attendance } from './Attendance';
 import { FinalGrades } from './FinalGrades';
 import { Gradebook } from './Gradebook';
@@ -23,6 +24,11 @@ export function LecturerGroupPage() {
     return (
         <>
             <PageHeader title={title} crumbs={[{ label: 'Moje grupy', to: '/teaching' }, { label: title }]} />
+            {group && (
+                <p className="-mt-3 mb-6 text-muted">
+                    {sessionSummary(group, true)}
+                </p>
+            )}
             {group && (
                 <Tabs
                     label="Prowadzenie grupy"

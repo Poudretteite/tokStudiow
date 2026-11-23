@@ -40,6 +40,15 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
+// Szybkie testy jednostkowe, bez bazy i Dockera: ./gradlew unitTest (./gradlew test uruchamia wszystkie)
+tasks.register<Test>("unitTest") {
+    description = "Runs unit tests only (no database, no Docker)."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { excludeTags("integration") }
+}
+
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     systemProperty("spring.profiles.active", "dev")
 }

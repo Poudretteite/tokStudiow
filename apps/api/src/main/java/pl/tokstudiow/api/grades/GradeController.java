@@ -54,8 +54,23 @@ public class GradeController {
     @PreAuthorize("hasRole('LECTURER')")
     public PartialGradeResponse correct(@PathVariable UUID groupId,
                                         @PathVariable UUID gradeId,
-                                        @Valid @RequestBody CorrectGradeRequest request) {
+                                        @Valid @RequestBody LecturerCorrectionRequest request) {
         return gradeService.correct(groupId, gradeId, request);
+    }
+
+    // oceny cząstkowe: dziekanat
+
+    @GetMapping("/api/dean-office/groups/{groupId}/partial-grades")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public List<PartialGradeResponse> gradebookForDeanOffice(@PathVariable UUID groupId) {
+        return gradeService.gradebookForDeanOffice(groupId);
+    }
+
+    @PostMapping("/api/dean-office/partial-grades/{gradeId}/correction")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public PartialGradeResponse correctAsDeanOffice(@PathVariable UUID gradeId,
+                                                    @Valid @RequestBody CorrectGradeRequest request) {
+        return gradeService.correctAsDeanOffice(gradeId, request);
     }
 
     @GetMapping("/api/lecturer/groups/{groupId}/partial-grades")

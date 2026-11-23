@@ -15,7 +15,8 @@ import java.util.UUID;
 public record CreateUserRequest(
         @NotBlank @Size(max = 100) String firstName,
         @NotBlank @Size(max = 100) String lastName,
-        @NotBlank @Email @Size(max = 255) String email,
+        // dla studenta pomijany – adres tworzy system (inicjały + numer albumu); dla pozostałych ról wymagany
+        @Email @Size(max = 255) @Nullable String email,
         @NotNull Role role,
         @NotBlank @Size(min = 12, max = 72) String password,
 

@@ -8,6 +8,7 @@ import pl.tokstudiow.api.common.BusinessRuleException;
 import pl.tokstudiow.api.common.ConflictException;
 import pl.tokstudiow.api.common.NotFoundException;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,14 @@ public class AcademicTermService {
         if (!request.endDate().isAfter(request.startDate())) {
             throw new BusinessRuleException("End date must be after start date");
         }
+        LocalDate sessionEnd = request.examSessionEnd() == null ? request.endDate() : request.examSessionEnd();
+        if (!sessionEnd.isAfter(request.startDate()) || sessionEnd.isAfter(request.endDate())) {
+            throw new BusinessRuleException("Exam session must end within the academic term");
+        }
+        LocalDate retakeEnd = request.retakeSessionEnd() == null ? sessionEnd : request.retakeSessionEnd();
+        if (retakeEnd.isBefore(sessionEnd)) {
+            throw new BusinessRuleException("Retake session cannot end before the exam session");
+        }
         String name = request.name().trim();
         if (terms.existsByNameIgnoreCase(name)) {
             throw new ConflictException("Academic term with this name already exists");
@@ -52,7 +61,8 @@ public class AcademicTermService {
             throw new ConflictException("Academic term overlaps an existing term");
         }
 
-        AcademicTerm term = terms.save(new AcademicTerm(name, request.type(), request.startDate(), request.endDate()));
+        AcademicTerm term = terms.save(new AcademicTerm(
+                name, request.type(), request.startDate(), request.endDate(), sessionEnd, retakeEnd));
         audit.record(AUDIT_ENTITY, term.getId(), AuditAction.CREATE, null, snapshot(term));
         return AcademicTermResponse.from(term);
     }
@@ -90,6 +100,8 @@ public class AcademicTermService {
         snapshot.put("type", term.getType().name());
         snapshot.put("startDate", term.getStartDate().toString());
         snapshot.put("endDate", term.getEndDate().toString());
+        snapshot.put("examSessionEnd", term.getExamSessionEnd().toString());
+        snapshot.put("retakeSessionEnd", term.getRetakeSessionEnd().toString());
         snapshot.put("current", term.isCurrentTerm());
         return snapshot;
     }
