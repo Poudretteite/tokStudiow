@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import pl.tokstudiow.api.auth.PasswordResetResponse;
 
 import java.util.List;
 import java.util.UUID;
@@ -60,6 +61,12 @@ public class StudyController {
     @ResponseStatus(HttpStatus.CREATED)
     public StudyResponse create(@Valid @RequestBody CreateStudyRequest request) {
         return studyService.create(request);
+    }
+
+    @PostMapping("/api/dean-office/studies/{id}/reset-password")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public PasswordResetResponse resetPassword(@PathVariable UUID id) {
+        return studyService.resetStudentPassword(id);
     }
 
     @PutMapping("/api/dean-office/studies/{id}")

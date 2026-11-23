@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import type { Role } from '../api/types';
 import { Seal } from '../components/Seal';
 import { ROLE_LABELS } from '../i18n/labels';
+import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 
 const NAVIGATION: Record<Role, { label: string; to: string }[]> = {
     STUDENT: [
@@ -33,6 +34,8 @@ export function AppLayout() {
     if (!user) {
         return null;
     }
+    // hasło startowe: bez menu i podstron, dopóki użytkownik nie ustawi własnego (serwer też blokuje resztę)
+    const forced = user.mustChangePassword;
 
     return (
         <div className="min-h-screen">
@@ -56,6 +59,14 @@ export function AppLayout() {
               </strong>
               <span className="opacity-85">{ROLE_LABELS[user.role]}</span>
             </span>
+                        {!forced && (
+                            <Link
+                                to="/password"
+                                className="rounded-sm whitespace-nowrap underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                            >
+                                Zmień hasło
+                            </Link>
+                        )}
                         <button
                             type="button"
                             onClick={logout}
@@ -67,27 +78,29 @@ export function AppLayout() {
                 </div>
             </header>
 
-            <nav aria-label="Menu główne" className="border-b border-line bg-white">
-                <div className={`${CONTAINER} flex gap-1 overflow-x-auto`}>
-                    {NAVIGATION[user.role].map((item) => (
-                        <NavLink
-                            key={item.to}
-                            to={item.to}
-                            end={item.to === '/'}
-                            className={({ isActive }) =>
-                                `border-b-[3px] px-3.5 pt-3 pb-2.5 text-[15px] font-semibold whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-navy ${
-                                    isActive ? 'border-navy text-navy' : 'border-transparent hover:bg-page hover:text-navy'
-                                }`
-                            }
-                        >
-                            {item.label}
-                        </NavLink>
-                    ))}
-                </div>
-            </nav>
+            {!forced && (
+                <nav aria-label="Menu główne" className="border-b border-line bg-white">
+                    <div className={`${CONTAINER} flex gap-1 overflow-x-auto`}>
+                        {NAVIGATION[user.role].map((item) => (
+                            <NavLink
+                                key={item.to}
+                                to={item.to}
+                                end={item.to === '/'}
+                                className={({ isActive }) =>
+                                    `border-b-[3px] px-3.5 pt-3 pb-2.5 text-[15px] font-semibold whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-navy ${
+                                        isActive ? 'border-navy text-navy' : 'border-transparent hover:bg-page hover:text-navy'
+                                    }`
+                                }
+                            >
+                                {item.label}
+                            </NavLink>
+                        ))}
+                    </div>
+                </nav>
+            )}
 
             <main className={`${CONTAINER} pt-6 pb-12`}>
-                <Outlet />
+                {forced ? <ChangePasswordPage forced /> : <Outlet />}
             </main>
         </div>
     );

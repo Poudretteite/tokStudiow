@@ -8,6 +8,8 @@ interface AuthState {
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
+    /** zmienia hasło; serwer kończy inne sesje i wydaje nowe tokeny dla tej karty */
+    changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -54,6 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(await api<Me>('/api/me'));
     }, []);
 
+    const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+        const tokens = await api<{ accessToken: string }>('/api/auth/password', {
+            method: 'POST',
+            headers: { 'X-Client': 'web' },
+            body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        setAccessToken(tokens.accessToken);
+        queryClient.clear();
+        setUser(await api<Me>('/api/me'));
+    }, [queryClient]);
+
     const logout = useCallback(async () => {
         await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Client': 'web' } });
         setAccessToken(null);
@@ -61,7 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
     }, [queryClient]);
 
-    const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+    const value = useMemo(
+        () => ({ user, loading, login, logout, changePassword }),
+        [user, loading, login, logout, changePassword],
+    );
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

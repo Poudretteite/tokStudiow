@@ -54,6 +54,14 @@ const MESSAGES: Record<string, string> = {
     'Some rows cannot be imported': 'Nie zaimportowano nikogo – popraw wiersze zaznaczone na czerwono.',
     'Duplicate email in import': 'Inny wiersz w pliku daje ten sam login (e-mail).',
     'Duplicate album number in import': 'Ten sam numer albumu jest w pliku więcej niż raz.',
+    'Current password is incorrect': 'Obecne hasło jest nieprawidłowe.',
+    'New password must differ from the current one': 'Nowe hasło musi różnić się od obecnego.',
+    'Password must have at least 12 characters': 'Hasło musi mieć co najmniej 12 znaków.',
+    'Password is too long': 'Hasło jest za długie (maks. 72 bajty, ok. 70 znaków).',
+    'Password must not contain your name or login': 'Hasło nie może zawierać imienia, nazwiska ani loginu.',
+    'Password is too easy to guess': 'To hasło łatwo odgadnąć – użyj kilku niepowiązanych słów.',
+    'You cannot reset your own password': 'Własne hasło zmień w „Zmień hasło”, podając obecne.',
+    'Account is deactivated': 'Konto jest zablokowane – nie można nadać mu hasła.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 

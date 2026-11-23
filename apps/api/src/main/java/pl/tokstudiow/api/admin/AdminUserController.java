@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import pl.tokstudiow.api.auth.PasswordResetResponse;
 
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +31,11 @@ public class AdminUserController {
     @GetMapping
     public List<UserResponse> list() {
         return userManagement.list();
+    }
+
+    @PostMapping("/{id}/reset-password")
+    public PasswordResetResponse resetPassword(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        return userManagement.resetPassword(id, UUID.fromString(jwt.getSubject()));
     }
 
     @PostMapping("/{id}/deactivate")

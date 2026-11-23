@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import type { AdminUser, Faculty, Role } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { PageHeader } from '../../components/PageHeader';
+import { ResetPasswordDialog } from '../../components/ResetPasswordDialog';
 import { Panel } from '../../components/Panel';
 import { QueryState } from '../../components/QueryState';
 import { Alert } from '../../components/ui/Alert';
@@ -40,11 +41,13 @@ function generatePassword(length = 16): string {
 
 export function UsersPage() {
     const { user: me } = useAuth();
+    const queryClient = useQueryClient();
     const users = useQuery({ queryKey: USERS_KEY, queryFn: () => api<AdminUser[]>('/api/admin/users') });
     const faculties = useQuery({ queryKey: ['faculties'], queryFn: () => api<Faculty[]>('/api/faculties') });
     const [search, setSearch] = useState('');
     const [role, setRole] = useState<Role | ''>('');
     const [deactivating, setDeactivating] = useState<AdminUser | null>(null);
+    const [resetting, setResetting] = useState<AdminUser | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
 
     const facultyName = (id: string | null) => faculties.data?.find((f) => f.id === id)?.shortName ?? '';
@@ -113,6 +116,9 @@ export function UsersPage() {
                                                 <Td>{formatInstant(u.createdAt)}</Td>
                                                 <Td className={u.active ? '' : 'font-semibold text-red-700'}>
                                                     {u.active ? 'aktywne' : 'zablokowane'}
+                                                    {u.active && u.mustChangePassword && (
+                                                        <div className="text-xs font-normal text-muted">hasło startowe</div>
+                                                    )}
                                                 </Td>
                                                 <Td className="text-right whitespace-nowrap">
                                                     <Link
@@ -121,6 +127,19 @@ export function UsersPage() {
                                                     >
                                                         Historia
                                                     </Link>
+                                                    {u.active && u.id !== me?.id && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            className="mr-2 px-3 py-1 text-sm"
+                                                            onClick={() => {
+                                                                setNotice(null);
+                                                                setResetting(u);
+                                                            }}
+                                                        >
+                                                            Nowe hasło
+                                                        </Button>
+                                                    )}
                                                     {u.active && u.id !== me?.id && (
                                                         <Button
                                                             type="button"
@@ -146,6 +165,14 @@ export function UsersPage() {
                 </QueryState>
             </div>
 
+            {resetting && (
+                <ResetPasswordDialog
+                    endpoint={`/api/admin/users/${encodeURIComponent(resetting.id)}/reset-password`}
+                    person={{ name: `${resetting.firstName} ${resetting.lastName}`, detail: resetting.email }}
+                    onClose={() => setResetting(null)}
+                    onDone={() => queryClient.invalidateQueries({ queryKey: USERS_KEY })}
+                />
+            )}
             {deactivating && (
                 <DeactivateDialog
                     user={deactivating}
@@ -306,7 +333,7 @@ function NewUserForm({ faculties }: { faculties: Faculty[] }) {
                 </div>
                 <p className="text-sm text-muted">
                     Hasło jest wygenerowane losowo. Przekaż je użytkownikowi osobiście lub inną bezpieczną drogą, nigdy
-                    w tym samym mailu co adres logowania.
+                    w tym samym mailu co adres logowania. Przy pierwszym logowaniu użytkownik musi ustawić własne hasło.
                 </p>
 
                 {created && (

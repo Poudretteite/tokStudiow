@@ -38,6 +38,13 @@ public class User {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /** Hasło nadał ktoś inny (import, administrator, reset) – użytkownik musi je zmienić, zanim zacznie pracę. */
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -62,8 +69,22 @@ public class User {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    public void changePasswordHash(String newPasswordHash) {
+    /** Hasło startowe lub po resecie: zna je osoba, która je nadała, więc trzeba je zmienić. */
+    public void setTemporaryPassword(String newPasswordHash) {
         this.passwordHash = newPasswordHash;
+        requirePasswordChange();
+    }
+
+    /** Dla nowego konta: hasło podane przy zakładaniu jest tylko startowe. */
+    public void requirePasswordChange() {
+        this.mustChangePassword = true;
+    }
+
+    /** Hasło wybrane przez samego użytkownika. */
+    public void changePassword(String newPasswordHash, Instant now) {
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = false;
+        this.passwordChangedAt = now;
     }
 
     public void deactivate() {
@@ -82,6 +103,8 @@ public class User {
     public Role getRole() { return role; }
     public String getPhoneNumber() { return phoneNumber; }
     public boolean isActive() { return active; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public Instant getPasswordChangedAt() { return passwordChangedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

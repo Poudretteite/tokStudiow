@@ -13,6 +13,8 @@ public record MeResponse(
         Role role,
         @Nullable String albumNumber,
         @Nullable UUID facultyId,
-        @Nullable String academicTitle
+        @Nullable String academicTitle,
+        // hasło startowe – interfejs pokazuje wtedy tylko formularz zmiany hasła
+        boolean mustChangePassword
 ) {
 }

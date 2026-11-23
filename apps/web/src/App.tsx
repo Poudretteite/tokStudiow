@@ -3,6 +3,7 @@ import { RequireAuth } from './auth/RequireAuth';
 import { RequireRole } from './auth/RequireRole';
 import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/HomePage';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { GroupDetailsPage } from './pages/student/GroupDetailsPage';
 import { MyGroupsPage } from './pages/student/MyGroupsPage';
@@ -22,6 +23,7 @@ export default function App() {
             <Route element={<RequireAuth />}>
                 <Route path="/" element={<AppLayout />}>
                     <Route index element={<HomePage />} />
+                    <Route path="password" element={<ChangePasswordPage />} />
                     <Route element={<RequireRole roles={['STUDENT']} />}>
                         <Route path="groups" element={<MyGroupsPage />} />
                         <Route path="groups/:groupId" element={<GroupDetailsPage />} />
