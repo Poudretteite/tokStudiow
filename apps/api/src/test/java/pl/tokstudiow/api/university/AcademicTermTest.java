@@ -36,6 +36,47 @@ class AcademicTermTest extends IntegrationTest {
     }
 
     @Test
+    void examSessionEndsWithTermByDefaultAndGivesTwoDaysForCorrections() throws Exception {
+        createTerm("2026/2027 zimowy", "WINTER", "2026-10-01", "2027-02-20")
+                .andExpect(jsonPath("$.examSessionEnd").value("2027-02-20"))
+                .andExpect(jsonPath("$.correctionDeadline").value("2027-02-22"));
+    }
+
+    @Test
+    void explicitExamSessionEndSetsCorrectionDeadline() throws Exception {
+        termWithSession("2027-02-15")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.examSessionEnd").value("2027-02-15"))
+                .andExpect(jsonPath("$.correctionDeadline").value("2027-02-17"));
+    }
+
+    @Test
+    void retakeSessionDefaultsToExamSession() throws Exception {
+        termWithSession("2027-02-15")
+                .andExpect(jsonPath("$.retakeSessionEnd").value("2027-02-15"))
+                .andExpect(jsonPath("$.retakeCorrectionDeadline").value("2027-02-17"));
+    }
+
+    @Test
+    void retakeSessionMayEndAfterTerm() throws Exception {
+        termWithSessions("2026/2027 zimowy", "2027-02-15", "2027-03-01")   // semestr kończy się 20.02
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.retakeSessionEnd").value("2027-03-01"))
+                .andExpect(jsonPath("$.retakeCorrectionDeadline").value("2027-03-03"));
+    }
+
+    @Test
+    void retakeSessionCannotEndBeforeExamSession() throws Exception {
+        termWithSessions("2026/2027 zimowy", "2027-02-15", "2027-02-10").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void examSessionOutsideTermIsRejected() throws Exception {
+        termWithSession("2027-03-01").andExpect(status().isBadRequest());
+        termWithSession("2026-09-30").andExpect(status().isBadRequest());
+    }
+
+    @Test
     void studentCannotCreateTerm() throws Exception {
         mvc.perform(post("/api/admin/academic-terms")
                         .header(AUTHORIZATION, bearer(studentToken))
@@ -90,6 +131,26 @@ class AcademicTermTest extends IntegrationTest {
                 .header(AUTHORIZATION, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(termJson(name, type, start, end)));
+    }
+
+    private ResultActions termWithSession(String sessionEnd) throws Exception {
+        return mvc.perform(post("/api/admin/academic-terms")
+                .header(AUTHORIZATION, bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "2026/2027 zimowy", "type": "WINTER", "startDate": "2026-10-01",
+                         "endDate": "2027-02-20", "examSessionEnd": "%s"}
+                        """.formatted(sessionEnd)));
+    }
+
+    private ResultActions termWithSessions(String name, String sessionEnd, String retakeEnd) throws Exception {
+        return mvc.perform(post("/api/admin/academic-terms")
+                .header(AUTHORIZATION, bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "%s", "type": "WINTER", "startDate": "2026-10-01", "endDate": "2027-02-20",
+                         "examSessionEnd": "%s", "retakeSessionEnd": "%s"}
+                        """.formatted(name, sessionEnd, retakeEnd)));
     }
 
     private ResultActions makeCurrent(String id) throws Exception {

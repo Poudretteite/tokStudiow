@@ -63,10 +63,25 @@ public class TestFixtures {
                 .findFirst().orElseThrow();
     }
 
+    /** Trwający semestr; sesja kończy się razem z nim, więc termin korekt jest jeszcze otwarty. */
     public AcademicTerm term() {
         LocalDate today = LocalDate.now();
         return terms.save(new AcademicTerm("Semestr testowy", TermType.WINTER,
                 today.minusMonths(1), today.plusMonths(4)));
+    }
+
+    /** Semestr z sesją zakończoną w podanym dniu – do testów terminu korekt (sesja + 2 dni). */
+    public AcademicTerm termWithSessionEnd(String name, LocalDate examSessionEnd) {
+        LocalDate today = LocalDate.now();
+        return terms.save(new AcademicTerm(name, TermType.WINTER,
+                today.minusMonths(1), today.plusMonths(4), examSessionEnd));
+    }
+
+    /** Semestr z osobnym końcem sesji i sesji poprawkowej. */
+    public AcademicTerm termWithSessions(String name, LocalDate examSessionEnd, LocalDate retakeSessionEnd) {
+        LocalDate today = LocalDate.now();
+        return terms.save(new AcademicTerm(name, TermType.WINTER,
+                today.minusMonths(1), today.plusMonths(4), examSessionEnd, retakeSessionEnd));
     }
 
     public User user(String firstName, String lastName, String email, Role role) {

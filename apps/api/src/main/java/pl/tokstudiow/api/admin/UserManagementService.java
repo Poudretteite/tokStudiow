@@ -19,6 +19,8 @@ import pl.tokstudiow.api.people.StudentProfile;
 import pl.tokstudiow.api.people.StudentProfileRepository;
 import pl.tokstudiow.api.university.Faculty;
 import pl.tokstudiow.api.university.FacultyRepository;
+import pl.tokstudiow.api.user.Role;
+import pl.tokstudiow.api.user.StudentEmailGenerator;
 import pl.tokstudiow.api.user.User;
 import pl.tokstudiow.api.user.UserRepository;
 
@@ -42,6 +44,7 @@ public class UserManagementService {
     private final StudentProfileRepository studentProfiles;
     private final LecturerProfileRepository lecturerProfiles;
     private final DeanOfficeProfileRepository deanOfficeProfiles;
+    private final StudentEmailGenerator emailGenerator;
 
     public UserManagementService(UserRepository users,
                                  PasswordEncoder passwordEncoder,
@@ -50,7 +53,8 @@ public class UserManagementService {
                                  FacultyRepository faculties,
                                  StudentProfileRepository studentProfiles,
                                  LecturerProfileRepository lecturerProfiles,
-                                 DeanOfficeProfileRepository deanOfficeProfiles) {
+                                 DeanOfficeProfileRepository deanOfficeProfiles,
+                                 StudentEmailGenerator emailGenerator) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokens = refreshTokens;
@@ -59,17 +63,15 @@ public class UserManagementService {
         this.studentProfiles = studentProfiles;
         this.lecturerProfiles = lecturerProfiles;
         this.deanOfficeProfiles = deanOfficeProfiles;
+        this.emailGenerator = emailGenerator;
     }
 
     @Transactional
     public UserResponse create(CreateUserRequest request) {
-        if (users.existsByEmailIgnoreCase(request.email())) {
-            throw new ConflictException("Email already in use");
-        }
-
         // 1. Sprawdź wymagania profilu, zanim cokolwiek zapiszesz
         String albumNumber = null;
         Faculty faculty = null;
+        String email;
         switch (request.role()) {
             case STUDENT -> {
                 if (request.albumNumber() == null || request.albumNumber().isBlank()) {
@@ -92,11 +94,23 @@ public class UserManagementService {
             }
         }
 
+        // Student dostaje adres uczelniany automatycznie; pozostałe role podają go same
+        if (request.role() == Role.STUDENT) {
+            email = emailGenerator.generate(request.firstName(), request.lastName(), albumNumber);
+        } else if (request.email() == null || request.email().isBlank()) {
+            throw new BusinessRuleException("Email is required for this role");
+        } else {
+            email = request.email().trim();
+        }
+        if (users.existsByEmailIgnoreCase(email)) {
+            throw new ConflictException("Email already in use");
+        }
+
         // 2. Zapisz konto i profil w jednej transakcji
         User user = users.save(new User(
                 request.firstName().trim(),
                 request.lastName().trim(),
-                request.email(),
+                email,
                 passwordEncoder.encode(request.password()),
                 request.role()));
 

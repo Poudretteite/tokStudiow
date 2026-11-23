@@ -37,6 +37,14 @@ export interface ClassGroup {
     lecturerLastName: string;
     groupNumber: number;
     capacity: number | null;
+    /** koniec sesji, wspólny dla wszystkich */
+    examSessionEnd: string;
+    /** ostatni dzień, w którym prowadzący sam poprawia oceny z I terminu (sesja + 2 dni) */
+    correctionDeadline: string;
+    /** koniec sesji poprawkowej (równy końcowi sesji, gdy nie ma osobnej) */
+    retakeSessionEnd: string;
+    /** ostatni dzień korekt ocen z sesji poprawkowej (jej koniec + 2 dni) */
+    retakeCorrectionDeadline: string;
 }
 
 export interface AssessmentItem {
@@ -173,6 +181,10 @@ export interface AcademicTerm {
     type: 'WINTER' | 'SUMMER';
     startDate: string;
     endDate: string;
+    examSessionEnd: string;
+    correctionDeadline: string;
+    retakeSessionEnd: string;
+    retakeCorrectionDeadline: string;
     current: boolean;
 }
 
@@ -268,4 +280,22 @@ export interface UnassignedStudent {
     firstName: string;
     lastName: string;
     albumNumber: string;
+}
+
+/** Błąd jednego wiersza operacji na wielu rekordach (numer wiersza od 1). */
+export interface RowError {
+    row: number;
+    field: string;
+    message: string;
+}
+
+/** Zaimportowany student z hasłem startowym, widocznym tylko w odpowiedzi na import. */
+export interface ImportedStudent {
+    studyId: string;
+    studentId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    albumNumber: string;
+    initialPassword: string;
 }

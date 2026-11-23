@@ -39,7 +39,7 @@ jobs:
           name: test-report
           path: apps/api/build/reports/tests/test
   frontend:
-    name: Frontend – lint i build
+    name: Frontend – lint, testy i build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -55,6 +55,7 @@ jobs:
 
       - run: npm ci
       - run: npm run lint --if-present
+      - run: npm test
       - run: npm run build
       - run: npm audit --audit-level=high
 

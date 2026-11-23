@@ -12,9 +12,11 @@ import java.util.UUID;
 public class StudyController {
 
     private final StudyService studyService;
+    private final StudentImportService importService;
 
-    public StudyController(StudyService studyService) {
+    public StudyController(StudyService studyService, StudentImportService importService) {
         this.studyService = studyService;
+        this.importService = importService;
     }
 
     @GetMapping("/api/me/studies")
@@ -38,6 +40,19 @@ public class StudyController {
     @PreAuthorize("hasRole('DEAN_OFFICE')")
     public List<UnassignedStudentResponse> unassignedStudents() {
         return studyService.unassignedStudents();
+    }
+
+    @PostMapping("/api/dean-office/students/import")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<ImportedStudentResponse> importStudents(@Valid @RequestBody StudentImportRequest request) {
+        return importService.importStudents(request);
+    }
+
+    @PostMapping("/api/dean-office/studies/batch-update")
+    @PreAuthorize("hasRole('DEAN_OFFICE')")
+    public List<StudyResponse> batchUpdate(@Valid @RequestBody StudyBatchUpdateRequest request) {
+        return studyService.batchUpdate(request);
     }
 
     @PostMapping("/api/dean-office/studies")

@@ -35,6 +35,14 @@ public class FinalGradeController {
         return finalGradeService.approveBatch(groupId, request);
     }
 
+    @PatchMapping("/api/lecturer/groups/{groupId}/final-grades/{finalGradeId}")
+    @PreAuthorize("hasRole('LECTURER')")
+    public FinalGradeResponse correctAsLecturer(@PathVariable UUID groupId,
+                                                @PathVariable UUID finalGradeId,
+                                                @Valid @RequestBody LecturerCorrectionRequest request) {
+        return finalGradeService.correctAsLecturer(groupId, finalGradeId, request);
+    }
+
     @GetMapping("/api/lecturer/groups/{groupId}/final-grade-sheet")
     @PreAuthorize("hasRole('LECTURER')")
     public List<FinalGradeSheetRowResponse> sheet(@PathVariable UUID groupId) {

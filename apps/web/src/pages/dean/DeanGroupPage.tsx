@@ -16,6 +16,8 @@ import { errorMessage } from '../../i18n/errors';
 import { formatInstant } from '../../i18n/format';
 import { gradeHint, parseGrade } from '../../i18n/grades';
 import { ATTEMPT_LABELS, COMPONENT_LABELS } from '../../i18n/labels';
+import { sessionSummary } from '../../lib/corrections';
+import { DeanPartialGrades } from './DeanPartialGrades';
 
 const ATTEMPT_ORDER: FinalAttempt[] = ['FIRST', 'SECOND', 'COMMISSION'];
 
@@ -36,12 +38,15 @@ export function DeanGroupPage() {
                 {(g) => (
                     <>
                         <p className="-mt-3 mb-6 text-muted">
-                            {g.courseCode}, {g.academicTermName}, prowadzący: {g.lecturerFirstName} {g.lecturerLastName}
+                            {g.courseCode}, {g.academicTermName}, prowadzący: {g.lecturerFirstName} {g.lecturerLastName}.
+                            <br />
+                            {sessionSummary(g, false)}
                         </p>
                         <Tabs
                             label="Obsługa grupy"
                             tabs={[
                                 { id: 'students', label: 'Studenci', content: <Students group={g} /> },
+                                { id: 'partial', label: 'Oceny cząstkowe', content: <DeanPartialGrades group={g} /> },
                                 { id: 'protocol', label: 'Protokół ocen', content: <Protocol group={g} /> },
                             ]}
                         />

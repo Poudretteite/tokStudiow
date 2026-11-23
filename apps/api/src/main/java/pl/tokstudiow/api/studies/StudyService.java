@@ -15,10 +15,14 @@ import pl.tokstudiow.api.people.StudentProfileRepository;
 import pl.tokstudiow.api.university.FieldOfStudy;
 import pl.tokstudiow.api.university.FieldOfStudyRepository;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class StudyService {
@@ -124,6 +128,39 @@ public class StudyService {
         return StudyResponse.from(study);
     }
 
+    /**
+     * Jedna zmiana dla wielu studentów wydziału naraz – wszystko albo nic: jeśli choć jedna osoba
+     * przekroczyłaby liczbę semestrów kierunku, nie zmienia się nikt.
+     */
+    @Transactional
+    public List<StudyResponse> batchUpdate(StudyBatchUpdateRequest request) {
+        if (request.promote() == (request.status() != null)) {
+            throw new BusinessRuleException("Choose exactly one change: promotion or status");
+        }
+        if (new HashSet<>(request.studyIds()).size() != request.studyIds().size()) {
+            throw new BusinessRuleException("Each student may appear only once in the request");
+        }
+        Map<UUID, Study> facultyStudies = studies.findForFaculty(myFacultyId()).stream()
+                .collect(Collectors.toMap(Study::getId, Function.identity()));
+
+        List<StudyResponse> updated = new ArrayList<>();
+        for (UUID id : request.studyIds()) {
+            Study study = facultyStudies.get(id);
+            if (study == null) {
+                throw notFound();
+            }
+            short semester = request.promote() ? (short) (study.getCurrentSemester() + 1) : study.getCurrentSemester();
+            StudyStatus status = request.status() != null ? request.status() : study.getStatus();
+            requireSemesterWithinField(semester, study.getFieldOfStudy());
+
+            Map<String, Object> before = snapshot(study);
+            study.update(semester, status);
+            audit.record(AUDIT_ENTITY, study.getId(), AuditAction.UPDATE, before, snapshot(study));
+            updated.add(StudyResponse.from(study));
+        }
+        return updated;
+    }
+
     // pomocnicze
 
     private UUID myFacultyId() {
@@ -142,7 +179,7 @@ public class StudyService {
         return new NotFoundException("Study not found");
     }
 
-    private static Map<String, Object> snapshot(Study study) {
+    static Map<String, Object> snapshot(Study study) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("studentId", study.getStudent().getUserId().toString());
         snapshot.put("fieldOfStudyId", study.getFieldOfStudy().getId().toString());

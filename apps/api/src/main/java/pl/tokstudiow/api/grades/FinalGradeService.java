@@ -9,6 +9,9 @@ import pl.tokstudiow.api.common.BusinessRuleException;
 import pl.tokstudiow.api.common.ConflictException;
 import pl.tokstudiow.api.common.CurrentUser;
 import pl.tokstudiow.api.common.NotFoundException;
+import pl.tokstudiow.api.grades.GradeProposalCalculator.ItemResult;
+import pl.tokstudiow.api.grades.GradeProposalCalculator.Proposal;
+import pl.tokstudiow.api.grades.GradeProposalCalculator.ScaleValue;
 import pl.tokstudiow.api.groups.ClassGroup;
 import pl.tokstudiow.api.groups.ClassGroupRepository;
 import pl.tokstudiow.api.groups.GroupEnrollment;
@@ -24,6 +27,8 @@ import pl.tokstudiow.api.user.UserRepository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,7 +37,6 @@ import java.util.stream.Collectors;
 public class FinalGradeService {
 
     private static final String AUDIT_ENTITY = "final_grade";
-    private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     private final ClassGroupRepository groups;
     private final GroupEnrollmentRepository enrollments;
@@ -44,6 +48,7 @@ public class FinalGradeService {
     private final UserRepository users;
     private final CurrentDeanOffice deanOffice;
     private final AuditService audit;
+    private final Clock clock;
 
     public FinalGradeService(ClassGroupRepository groups,
                              GroupEnrollmentRepository enrollments,
@@ -54,7 +59,8 @@ public class FinalGradeService {
                              StudyRepository studies,
                              UserRepository users,
                              CurrentDeanOffice deanOffice,
-                             AuditService audit) {
+                             AuditService audit,
+                             Clock clock) {
         this.groups = groups;
         this.enrollments = enrollments;
         this.finalGrades = finalGrades;
@@ -65,6 +71,7 @@ public class FinalGradeService {
         this.users = users;
         this.deanOffice = deanOffice;
         this.audit = audit;
+        this.clock = clock;
     }
 
     // prowadzący: szkic
@@ -141,8 +148,8 @@ public class FinalGradeService {
                     student.getUser().getLastName(),
                     student.getAlbumNumber(),
                     proposal.average(),
-                    proposal.value() == null ? null : proposal.value().getId(),
-                    proposal.value() == null ? null : proposal.value().getLabel(),
+                    proposal.value() == null ? null : proposal.value().id(),
+                    proposal.value() == null ? null : proposal.value().label(),
                     attempts.stream().map(FinalGradeResponse::from).toList(),
                     openAttempt(attempts),
                     attempts.stream()
@@ -260,107 +267,36 @@ public class FinalGradeService {
                     student.getUser().getLastName(),
                     student.getAlbumNumber(),
                     proposal.average(),
-                    proposal.value() == null ? null : proposal.value().getId(),
-                    proposal.value() == null ? null : proposal.value().getLabel());
+                    proposal.value() == null ? null : proposal.value().id(),
+                    proposal.value() == null ? null : proposal.value().label());
         }).toList();
     }
 
     /** Propozycje dla wszystkich studentów z listy, według identyfikatora zapisu do grupy. */
     private Map<UUID, Proposal> proposalsFor(ClassGroup group, List<GroupEnrollment> roster) {
         GradingScale componentScale = group.getCourseComponent().getGradingScale();
+        boolean passFail = componentScale.getType() == GradingScaleType.PASS_FAIL;
+        List<ScaleValue> scaleValues = componentScale.getValues().stream().map(ScaleValue::of).toList();
         List<AssessmentItem> allItems = items.findByClassGroupIdOrderByOrderIndex(group.getId());
-        List<AssessmentItem> gradedItems = allItems.stream()
-                .filter(i -> i.getGradingScale().getType() == GradingScaleType.NUMERIC)
-                .toList();
-        BigDecimal gradedWeight = gradedItems.stream()
-                .map(AssessmentItem::getWeightPercent)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        boolean computable = !allItems.isEmpty()
-                && (gradedItems.isEmpty() || gradedWeight.compareTo(HUNDRED) == 0)
-                // na ocenę końcową liczbową potrzebny jest co najmniej jeden element „na ocenę”
-                && (componentScale.getType() == GradingScaleType.PASS_FAIL || !gradedItems.isEmpty());
-
+        // ostatnia próba z każdego elementu: lista jest posortowana po próbie, późniejsza nadpisuje
         Map<String, PartialGrade> latest = new HashMap<>();
         for (PartialGrade grade : partialGrades.findForGroup(group.getId())) {
             latest.put(key(grade.getGroupEnrollment(), grade.getAssessmentItem()), grade);
         }
-        List<GradeValue> numericValues = componentScale.getValues().stream()
-                .filter(v -> v.getNumericValue() != null)
-                .sorted(Comparator.comparing(GradeValue::getNumericValue))
-                .toList();
 
         Map<UUID, Proposal> result = new HashMap<>();
         for (GroupEnrollment enrollment : roster) {
-            result.put(enrollment.getId(), computable
-                    ? propose(enrollment, allItems, gradedItems, latest, componentScale, numericValues)
-                    : Proposal.NONE);
+            List<ItemResult> results = allItems.stream().map(item -> {
+                PartialGrade last = latest.get(key(enrollment, item));
+                return new ItemResult(
+                        item.getGradingScale().getType() == GradingScaleType.NUMERIC,
+                        item.getWeightPercent(),
+                        last == null ? null : ScaleValue.of(last.getGradeValue()));
+            }).toList();
+            result.put(enrollment.getId(), GradeProposalCalculator.propose(passFail, scaleValues, results));
         }
         return result;
-    }
-
-    private record Proposal(@Nullable BigDecimal average, @Nullable GradeValue value) {
-        static final Proposal NONE = new Proposal(null, null);
-    }
-
-    private static Proposal propose(GroupEnrollment enrollment,
-                                    List<AssessmentItem> allItems,
-                                    List<AssessmentItem> gradedItems,
-                                    Map<String, PartialGrade> latest,
-                                    GradingScale componentScale,
-                                    List<GradeValue> numericValues) {
-        for (AssessmentItem item : allItems) {
-            if (!latest.containsKey(key(enrollment, item))) {
-                return Proposal.NONE;
-            }
-        }
-        BigDecimal average = gradedItems.isEmpty() ? null : weightedAverage(enrollment, gradedItems, latest);
-
-        if (componentScale.getType() == GradingScaleType.PASS_FAIL) {
-            boolean allPassed = allItems.stream()
-                    .allMatch(item -> latest.get(key(enrollment, item)).getGradeValue().isPassing());
-            return new Proposal(average, passFailValue(componentScale, allPassed));
-        }
-
-        boolean requirementsMet = allItems.stream()
-                .filter(item -> item.getGradingScale().getType() == GradingScaleType.PASS_FAIL)
-                .allMatch(item -> latest.get(key(enrollment, item)).getGradeValue().isPassing());
-        if (!requirementsMet) {
-            return new Proposal(average, lowestFailing(numericValues));
-        }
-        return new Proposal(average, nearest(average, numericValues));
-    }
-
-    /** Średnia ważona z elementów „na ocenę”. */
-    private static BigDecimal weightedAverage(GroupEnrollment enrollment, List<AssessmentItem> gradedItems,
-                                              Map<String, PartialGrade> latest) {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (AssessmentItem item : gradedItems) {
-            BigDecimal value = latest.get(key(enrollment, item)).getGradeValue().getNumericValue();
-            sum = sum.add(item.getWeightPercent().multiply(value));
-        }
-        return sum.divide(HUNDRED, 2, RoundingMode.HALF_UP);
-    }
-
-    /** Najbliższa ocena ze skali; przy remisie wyższa. */
-    private static GradeValue nearest(BigDecimal average, List<GradeValue> ascendingValues) {
-        GradeValue best = ascendingValues.getFirst();
-        for (GradeValue candidate : ascendingValues) {
-            BigDecimal distance = candidate.getNumericValue().subtract(average).abs();
-            BigDecimal bestDistance = best.getNumericValue().subtract(average).abs();
-            if (distance.compareTo(bestDistance) <= 0) {
-                best = candidate;
-            }
-        }
-        return best;
-    }
-
-    private static GradeValue lowestFailing(List<GradeValue> ascendingValues) {
-        return ascendingValues.stream().filter(v -> !v.isPassing()).findFirst().orElse(ascendingValues.getFirst());
-    }
-
-    private static GradeValue passFailValue(GradingScale scale, boolean passed) {
-        return scale.getValues().stream().filter(v -> v.isPassing() == passed).findFirst().orElseThrow();
     }
 
     private static String key(GroupEnrollment enrollment, AssessmentItem item) {
@@ -384,17 +320,43 @@ public class FinalGradeService {
     }
 
     /**
-     * Korekta zatwierdzonej oceny końcowej przez dziekanat (np. na wniosek prowadzącego).
-     * Tylko ostatni termin studenta – zmiana wcześniejszego unieważniłaby sens kolejnych.
-     * Uzasadnienie i poprzednia wartość trafiają do audytu.
+     * Korekta zatwierdzonej oceny końcowej przez dziekanat – także po terminie korekt.
+     * Zawsze z komentarzem (podstawą zmiany), który trafia do audytu.
      */
     @Transactional
     public FinalGradeResponse correctApproved(UUID finalGradeId, CorrectGradeRequest request) {
         UUID facultyId = deanOffice.facultyId();
         FinalGrade grade = finalGrades.findById(finalGradeId)
                 .filter(g -> g.getGroupEnrollment().getClassGroup().facultyId().equals(facultyId))
-                .orElseThrow(() -> new NotFoundException("Final grade not found"));
+                .orElseThrow(FinalGradeService::finalGradeNotFound);
+        return applyCorrection(grade, request.gradeValueId(), request.reason());
+    }
 
+    /**
+     * Korekta pomyłki w zatwierdzonej ocenie przez prowadzącego, bez podawania powodu.
+     * I termin – do końca sesji + 2 dni, poprawka i komisja – do końca sesji poprawkowej + 2 dni.
+     * Po terminie ocenę zmienia już tylko dziekanat.
+     */
+    @Transactional
+    public FinalGradeResponse correctAsLecturer(UUID groupId, UUID finalGradeId, LecturerCorrectionRequest request) {
+        ClassGroup group = myGroup(groupId);
+        FinalGrade grade = finalGrades.findById(finalGradeId)
+                .filter(g -> g.getGroupEnrollment().getClassGroup().getId().equals(groupId))
+                .orElseThrow(FinalGradeService::finalGradeNotFound);
+        // I termin: do końca sesji + 2 dni; poprawka i komisja: do końca sesji poprawkowej + 2 dni
+        boolean retake = grade.getAttempt() != FinalAttempt.FIRST;
+        if (!group.getAcademicTerm().allowsLecturerCorrection(LocalDate.now(clock), retake)) {
+            throw new ConflictException("Correction period has ended");
+        }
+        return applyCorrection(grade, request.gradeValueId(), null);
+    }
+
+    /**
+     * Wspólne reguły korekty: tylko zatwierdzona ocena (szkic zmienia się w arkuszu) i tylko ostatni
+     * termin studenta – zmiana wcześniejszego unieważniłaby sens kolejnych. Stara i nowa wartość
+     * oraz osoba korygująca trafiają do audytu; komentarz dziekanatu również.
+     */
+    private FinalGradeResponse applyCorrection(FinalGrade grade, UUID gradeValueId, @Nullable String reason) {
         boolean laterAttemptExists = finalGrades.findForGroup(grade.getGroupEnrollment().getClassGroup().getId()).stream()
                 .anyMatch(g -> g.getGroupEnrollment().getId().equals(grade.getGroupEnrollment().getId())
                         && g.getAttempt().compareTo(grade.getAttempt()) > 0);
@@ -402,11 +364,14 @@ public class FinalGradeService {
             throw new ConflictException("Only the latest attempt can be corrected");
         }
 
-        GradeValue value = gradeValues.findById(request.gradeValueId())
+        GradeValue value = gradeValues.findById(gradeValueId)
                 .orElseThrow(() -> new NotFoundException("Grade value not found"));
         GradingScale scale = grade.getGroupEnrollment().getClassGroup().getCourseComponent().getGradingScale();
         if (!value.getGradingScale().getId().equals(scale.getId())) {
             throw new BusinessRuleException("Grade value does not belong to the grading scale of this course component");
+        }
+        if (!grade.isApproved()) {
+            throw new ConflictException("Only approved final grades can be corrected");
         }
         if (value.getId().equals(grade.getGradeValue().getId())) {
             return FinalGradeResponse.from(grade);
@@ -416,9 +381,15 @@ public class FinalGradeService {
         grade.correctApproved(value);
         Map<String, Object> after = snapshot(grade);
         after.put("correctedBy", CurrentUser.id().toString());
-        after.put("reason", request.reason().trim());
+        if (reason != null && !reason.isBlank()) {
+            after.put("reason", reason.trim());
+        }
         audit.record(AUDIT_ENTITY, grade.getId(), AuditAction.UPDATE, before, after);
         return FinalGradeResponse.from(grade);
+    }
+
+    private static NotFoundException finalGradeNotFound() {
+        return new NotFoundException("Final grade not found");
     }
 
     // student: indeks

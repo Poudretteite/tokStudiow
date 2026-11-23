@@ -25,6 +25,14 @@ public class ApiExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    /** Wszystkie błędne wiersze naraz, żeby dało się je poprawić za jednym razem. */
+    @ExceptionHandler(RowValidationException.class)
+    public ProblemDetail handleRows(RowValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty("rows", ex.getRows());
+        return problem;
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity() {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Data conflict");

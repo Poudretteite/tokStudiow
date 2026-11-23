@@ -3,6 +3,7 @@ package pl.tokstudiow.api.groups;
 import org.jspecify.annotations.Nullable;
 import pl.tokstudiow.api.university.ComponentType;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record ClassGroupResponse(
@@ -18,7 +19,11 @@ public record ClassGroupResponse(
         String lecturerFirstName,
         String lecturerLastName,
         short groupNumber,
-        @Nullable Short capacity
+        @Nullable Short capacity,
+        LocalDate examSessionEnd,
+        LocalDate correctionDeadline,
+        LocalDate retakeSessionEnd,
+        LocalDate retakeCorrectionDeadline
 ) {
     static ClassGroupResponse from(ClassGroup group) {
         var component = group.getCourseComponent();
@@ -38,6 +43,10 @@ public record ClassGroupResponse(
                 lecturer.getUser().getFirstName(),
                 lecturer.getUser().getLastName(),
                 group.getGroupNumber(),
-                group.getCapacity());
+                group.getCapacity(),
+                term.getExamSessionEnd(),
+                term.correctionDeadline(),
+                term.getRetakeSessionEnd(),
+                term.retakeCorrectionDeadline());
     }
 }

@@ -59,13 +59,13 @@ class AdminUserControllerTest extends IntegrationTest {
 
     @Test
     void duplicateEmailIsRejectedRegardlessOfCase() throws Exception {
-        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("ANNA@test.pl", "STUDENT", PASSWORD))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("ANNA@test.pl", "ADMIN", PASSWORD))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void shortPasswordIsRejected() throws Exception {
-        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "STUDENT", "short"))
+        createUserViaApi(tokenFor("admin@test.pl"), newUserJson("jan@test.pl", "ADMIN", "short"))
                 .andExpect(status().isBadRequest());
     }
 

@@ -5,8 +5,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Czyści bazę między testami. Wyłącznie w testach: wyłącza triggery
- * (w tym ochronę audit_log) tylko na czas jednej transakcji.
+ * Czyści bazę między testami. Leży w źródłach testowych, więc nie trafia do aplikacji:
+ * wyłącza triggery (w tym ochronę audit_log) tylko na czas jednej transakcji.
  */
 public class DatabaseCleaner {
 
@@ -21,8 +21,7 @@ public class DatabaseCleaner {
     public void clean() {
         transaction.executeWithoutResult(status -> {
             jdbc.execute("SET LOCAL session_replication_role = replica");
-            jdbc.execute("TRUNCATE audit_log, refresh_tokens, users CASCADE");
-            jdbc.execute("TRUNCATE audit_log, refresh_tokens, users, faculties CASCADE");
+            // CASCADE czyści też wszystko, co od tych tabel zależy (studia, grupy, oceny, obecności)
             jdbc.execute("TRUNCATE audit_log, refresh_tokens, users, faculties, academic_terms, rooms CASCADE");
         });
     }
