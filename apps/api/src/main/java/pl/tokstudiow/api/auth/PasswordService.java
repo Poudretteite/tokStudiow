@@ -36,6 +36,7 @@ public class PasswordService {
     private final AuditService audit;
     private final JwtProperties properties;
     private final Clock clock;
+    private final LoginThrottle throttle;
 
     public PasswordService(UserRepository users,
                            PasswordEncoder passwordEncoder,
@@ -45,7 +46,8 @@ public class PasswordService {
                            InitialPasswordGenerator passwordGenerator,
                            AuditService audit,
                            JwtProperties properties,
-                           Clock clock) {
+                           Clock clock,
+                           LoginThrottle throttle) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokens = refreshTokens;
@@ -55,6 +57,7 @@ public class PasswordService {
         this.audit = audit;
         this.properties = properties;
         this.clock = clock;
+        this.throttle = throttle;
     }
 
     /**
@@ -67,9 +70,14 @@ public class PasswordService {
                 .filter(User::isActive)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
+        // skradziony token nie może służyć do zgadywania hasła – ten sam limit prób co przy logowaniu
+        String throttleKey = LoginThrottle.passwordChangeKey(userId);
+        throttle.checkAllowed(throttleKey);
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throttle.recordPasswordChangeFailure(userId);
             throw new BusinessRuleException("Current password is incorrect");
         }
+        throttle.clear(throttleKey);
         if (request.newPassword().equals(request.currentPassword())) {
             throw new BusinessRuleException("New password must differ from the current one");
         }
@@ -105,6 +113,9 @@ public class PasswordService {
 
         Map<String, Object> before = snapshot(user);
         user.setTemporaryPassword(passwordEncoder.encode(password));
+        // reset to też sposób na odblokowanie konta po zbyt wielu nieudanych logowaniach
+        throttle.clear(LoginThrottle.accountKey(user.getEmail()));
+        throttle.clear(LoginThrottle.passwordChangeKey(user.getId()));
         refreshTokens.revokeAllActiveForUser(user.getId(), clock.instant());
         audit.record(AUDIT_ENTITY, user.getId(), AuditAction.UPDATE, before, withEvent(snapshot(user), "PASSWORD_RESET"));
 

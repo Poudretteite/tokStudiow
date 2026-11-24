@@ -27,6 +27,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import pl.tokstudiow.api.auth.JwtProperties;
+import pl.tokstudiow.api.auth.LoginThrottleProperties;
 import pl.tokstudiow.api.auth.TokenService;
 
 import javax.crypto.SecretKey;
@@ -36,7 +37,7 @@ import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, LoginThrottleProperties.class})
 public class SecurityConfig {
 
     static final String PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED";

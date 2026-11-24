@@ -1,5 +1,6 @@
 package pl.tokstudiow.api.auth;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.jspecify.annotations.Nullable;
@@ -37,8 +38,11 @@ public class AuthController {
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest request,
                                @RequestHeader(name = CLIENT_HEADER, required = false) @Nullable String client,
+                               HttpServletRequest httpRequest,
                                HttpServletResponse response) {
-        return deliver(authService.login(request.email(), request.password()), client, response);
+        // adres z połączenia, nie z nagłówka X-Forwarded-For, który klient może wpisać dowolnie
+        return deliver(authService.login(request.email(), request.password(), httpRequest.getRemoteAddr()),
+                client, response);
     }
 
     @PostMapping("/refresh")

@@ -22,7 +22,7 @@ public class DatabaseCleaner {
         transaction.executeWithoutResult(status -> {
             jdbc.execute("SET LOCAL session_replication_role = replica");
             // CASCADE czyści też wszystko, co od tych tabel zależy (studia, grupy, oceny, obecności)
-            jdbc.execute("TRUNCATE audit_log, refresh_tokens, users, faculties, academic_terms, rooms CASCADE");
+            jdbc.execute("TRUNCATE audit_log, refresh_tokens, login_throttle, users, faculties, academic_terms, rooms CASCADE");
         });
     }
 }

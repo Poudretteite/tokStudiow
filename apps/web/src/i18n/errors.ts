@@ -55,6 +55,7 @@ const MESSAGES: Record<string, string> = {
     'Duplicate email in import': 'Inny wiersz w pliku daje ten sam login (e-mail).',
     'Duplicate album number in import': 'Ten sam numer albumu jest w pliku więcej niż raz.',
     'Current password is incorrect': 'Obecne hasło jest nieprawidłowe.',
+    'Too many attempts': 'Zbyt wiele nieudanych prób. Ze względów bezpieczeństwa spróbuj ponownie za kilka minut.',
     'New password must differ from the current one': 'Nowe hasło musi różnić się od obecnego.',
     'Password must have at least 12 characters': 'Hasło musi mieć co najmniej 12 znaków.',
     'Password is too long': 'Hasło jest za długie (maks. 72 bajty, ok. 70 znaków).',
