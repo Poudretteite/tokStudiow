@@ -5,6 +5,7 @@ import { Seal } from '../components/Seal';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { TextField } from '../components/ui/TextField';
+import { loginErrorMessage } from '../lib/loginError';
 
 export function LoginPage() {
     const { user, login } = useAuth();
@@ -26,8 +27,9 @@ export function LoginPage() {
         try {
             await login(email, password);
             navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true });
-        } catch {
-            setError('Nieprawidłowy adres e-mail lub hasło.');
+        } catch (e) {
+            // komunikat z AuthContext (złe dane albo blokada po zbyt wielu próbach); brak sieci – ogólny
+            setError(e instanceof TypeError || !(e instanceof Error) ? loginErrorMessage(0, null) : e.message);
         } finally {
             setSubmitting(false);
         }

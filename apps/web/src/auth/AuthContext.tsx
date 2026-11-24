@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useQueryClient } from '@tanstack/react-query';
 import { api, refreshAccessToken, setAccessToken, setSessionExpiredHandler } from '../api/client';
 import type { Me } from '../api/types';
+import { loginErrorMessage } from '../lib/loginError';
 
 interface AuthState {
     user: Me | null;
@@ -50,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ email, password }),
         });
         if (!response.ok) {
-            throw new Error('Nieprawidłowy e-mail lub hasło');
+            throw new Error(loginErrorMessage(response.status, response.headers.get('Retry-After')));
         }
         setAccessToken((await response.json()).accessToken);
         setUser(await api<Me>('/api/me'));

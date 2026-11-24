@@ -17,6 +17,14 @@ app:
   time-zone: Europe/Warsaw
   # domena adresów studentów tworzonych automatycznie: inicjały + numer albumu, np. an123456@tokstudiow.pl
   student-email-domain: tokstudiow.pl
+  # zgadywanie haseł: po tylu nieudanych próbach w oknie czasu logowanie jest wstrzymane na lock-duration
+  # (na konto – także nieistniejące, żeby nie zdradzać, które adresy są w systemie – i na adres IP)
+  # Za reverse proxy ustaw server.forward-headers-strategy, inaczej wszyscy mają adres IP proxy.
+  login-throttle:
+    max-failures-per-account: 5
+    max-failures-per-ip: 20
+    window: 15m
+    lock-duration: 15m
   jwt:
     secret: ${JWT_SECRET}
     access-token-ttl: 15m
