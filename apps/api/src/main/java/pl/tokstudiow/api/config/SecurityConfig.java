@@ -6,7 +6,14 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,11 +32,14 @@ import pl.tokstudiow.api.auth.TokenService;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
+import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
+
+    static final String PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED";
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -39,10 +49,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // konto z hasłem startowym może tylko zmienić hasło i odczytać, kim jest
+                        .requestMatchers(HttpMethod.POST, "/api/auth/password").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/me", "/api/auth/me").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/dean-office/**").hasRole("DEAN_OFFICE")
                         .requestMatchers("/api/lecturer/**").hasRole("LECTURER")
-                        .anyRequest().authenticated())
+                        .anyRequest().access(passwordChanged()))
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
         return http.build();
@@ -70,14 +83,33 @@ public class SecurityConfig {
         return decoder;
     }
 
+    /**
+     * Token konta z hasłem startowym nie niesie roli, tylko uprawnienie PASSWORD_CHANGE_REQUIRED.
+     * Dzięki temu nie przejdzie ani reguł z adresów (hasRole), ani {@code @PreAuthorize} w kontrolerach.
+     */
     private JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-        authorities.setAuthoritiesClaimName("role");
-        authorities.setAuthorityPrefix("ROLE_");
+        JwtGrantedAuthoritiesConverter roles = new JwtGrantedAuthoritiesConverter();
+        roles.setAuthoritiesClaimName("role");
+        roles.setAuthorityPrefix("ROLE_");
 
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        converter.setJwtGrantedAuthoritiesConverter(jwt ->
+                Boolean.TRUE.equals(jwt.getClaimAsBoolean(TokenService.PASSWORD_CHANGE_CLAIM))
+                        ? List.<GrantedAuthority>of(new SimpleGrantedAuthority(PASSWORD_CHANGE_REQUIRED))
+                        : roles.convert(jwt));
         return converter;
+    }
+
+    /** Pozostałe adresy: zalogowany i bez obowiązku zmiany hasła. */
+    private static AuthorizationManager<RequestAuthorizationContext> passwordChanged() {
+        return (authentication, context) -> {
+            Authentication auth = authentication.get();
+            boolean allowed = auth != null && auth.isAuthenticated()
+                    && !(auth instanceof AnonymousAuthenticationToken)
+                    && auth.getAuthorities().stream()
+                    .noneMatch(a -> PASSWORD_CHANGE_REQUIRED.equals(a.getAuthority()));
+            return new AuthorizationDecision(allowed);
+        };
     }
 
     private static SecretKey secretKey(JwtProperties properties) {

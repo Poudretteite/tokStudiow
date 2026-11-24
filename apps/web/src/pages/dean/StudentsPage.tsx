@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import type { StudyRecord, StudyStatus, UnassignedStudent } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { PageHeader } from '../../components/PageHeader';
+import { ResetPasswordDialog } from '../../components/ResetPasswordDialog';
 import { Panel } from '../../components/Panel';
 import { QueryState } from '../../components/QueryState';
 import { Alert } from '../../components/ui/Alert';
@@ -31,6 +32,7 @@ export function StudentsPage() {
     const catalog = useFacultyCatalog(user?.facultyId ?? null);
     const studies = useQuery({ queryKey: STUDIES_KEY, queryFn: () => api<StudyRecord[]>('/api/dean-office/studies') });
     const [editing, setEditing] = useState<StudyRecord | null>(null);
+    const [resetting, setResetting] = useState<StudyRecord | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
 
     return (
@@ -55,6 +57,10 @@ export function StudentsPage() {
                                 setNotice(null);
                                 setEditing(s);
                             }}
+                            onResetPassword={(s) => {
+                                setNotice(null);
+                                setResetting(s);
+                            }}
                         />
                     )}
                 </QueryState>
@@ -64,6 +70,16 @@ export function StudentsPage() {
                     study={editing}
                     onClose={() => setEditing(null)}
                     onSaved={() => setNotice(`Zapisano zmiany: ${editing.studentFirstName} ${editing.studentLastName}.`)}
+                />
+            )}
+            {resetting && (
+                <ResetPasswordDialog
+                    endpoint={`/api/dean-office/studies/${encodeURIComponent(resetting.id)}/reset-password`}
+                    person={{
+                        name: `${resetting.studentFirstName} ${resetting.studentLastName}`,
+                        detail: `album ${resetting.albumNumber}`,
+                    }}
+                    onClose={() => setResetting(null)}
                 />
             )}
         </>
@@ -79,11 +95,13 @@ function StudyList({
     notice,
     onNotice,
     onEdit,
+    onResetPassword,
 }: {
     list: StudyRecord[];
     notice: string | null;
     onNotice: (text: string | null) => void;
     onEdit: (study: StudyRecord) => void;
+    onResetPassword: (study: StudyRecord) => void;
 }) {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
@@ -229,9 +247,18 @@ function StudyList({
                                 <Td>{s.startYear}</Td>
                                 <Td>{s.currentSemester}</Td>
                                 <Td className={s.status === 'ACTIVE' ? '' : 'text-muted'}>{STUDY_STATUS_LABELS[s.status]}</Td>
-                                <Td className="text-right">
+                                <Td className="text-right whitespace-nowrap">
                                     <Button type="button" variant="secondary" className="px-3 py-1 text-sm" onClick={() => onEdit(s)}>
                                         Zmień
+                                    </Button>{' '}
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        className="px-3 py-1 text-sm"
+                                        aria-label={`Nowe hasło: ${s.studentFirstName} ${s.studentLastName}`}
+                                        onClick={() => onResetPassword(s)}
+                                    >
+                                        Nowe hasło
                                     </Button>
                                 </Td>
                             </Tr>

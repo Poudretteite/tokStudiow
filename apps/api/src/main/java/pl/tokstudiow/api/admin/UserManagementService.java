@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.tokstudiow.api.audit.AuditAction;
 import pl.tokstudiow.api.audit.AuditService;
+import pl.tokstudiow.api.auth.PasswordResetResponse;
+import pl.tokstudiow.api.auth.PasswordService;
 import pl.tokstudiow.api.auth.RefreshTokenRepository;
 import pl.tokstudiow.api.common.BusinessRuleException;
 import pl.tokstudiow.api.common.ConflictException;
@@ -45,6 +47,7 @@ public class UserManagementService {
     private final LecturerProfileRepository lecturerProfiles;
     private final DeanOfficeProfileRepository deanOfficeProfiles;
     private final StudentEmailGenerator emailGenerator;
+    private final PasswordService passwords;
 
     public UserManagementService(UserRepository users,
                                  PasswordEncoder passwordEncoder,
@@ -54,7 +57,8 @@ public class UserManagementService {
                                  StudentProfileRepository studentProfiles,
                                  LecturerProfileRepository lecturerProfiles,
                                  DeanOfficeProfileRepository deanOfficeProfiles,
-                                 StudentEmailGenerator emailGenerator) {
+                                 StudentEmailGenerator emailGenerator,
+                                 PasswordService passwords) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokens = refreshTokens;
@@ -64,6 +68,7 @@ public class UserManagementService {
         this.lecturerProfiles = lecturerProfiles;
         this.deanOfficeProfiles = deanOfficeProfiles;
         this.emailGenerator = emailGenerator;
+        this.passwords = passwords;
     }
 
     @Transactional
@@ -107,12 +112,14 @@ public class UserManagementService {
         }
 
         // 2. Zapisz konto i profil w jednej transakcji
-        User user = users.save(new User(
+        User account = new User(
                 request.firstName().trim(),
                 request.lastName().trim(),
                 email,
                 passwordEncoder.encode(request.password()),
-                request.role()));
+                request.role());
+        account.requirePasswordChange();     // hasło zna administrator, więc jest tylko startowe
+        User user = users.save(account);
 
         switch (request.role()) {
             case STUDENT -> studentProfiles.save(new StudentProfile(user, albumNumber, request.birthdate()));
@@ -138,6 +145,17 @@ public class UserManagementService {
         return users.findAll(Sort.by("lastName", "firstName")).stream()
                 .map(u -> UserResponse.from(u, albums.get(u.getId()), userFaculties.get(u.getId())))
                 .toList();
+    }
+
+    /** Własne hasło administrator zmienia jak każdy, podając obecne – reset służy innym kontom. */
+    @Transactional
+    public PasswordResetResponse resetPassword(UUID userId, UUID actingAdminId) {
+        if (userId.equals(actingAdminId)) {
+            throw new BusinessRuleException("You cannot reset your own password");
+        }
+        User user = users.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return passwords.reset(user);
     }
 
     @Transactional

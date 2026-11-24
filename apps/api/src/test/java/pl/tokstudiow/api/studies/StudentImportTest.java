@@ -61,7 +61,11 @@ class StudentImportTest extends IntegrationTest {
 
         String password = JsonPath.read(json, "$[0].initialPassword");
         assertThat(password).hasSize(16);
-        login("om2001@tokstudiow.pl", password).andExpect(status().isOk());
+        String studentToken = JsonPath.read(login("om2001@tokstudiow.pl", password).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(), "$.accessToken");
+        // hasło startowe zna dziekanat, więc student musi je zmienić przy pierwszym logowaniu
+        mvc.perform(get("/api/me").header(AUTHORIZATION, bearer(studentToken)))
+                .andExpect(jsonPath("$.mustChangePassword").value(true));
 
         mvc.perform(get("/api/dean-office/studies").header(AUTHORIZATION, bearer(deanToken)))
                 .andExpect(jsonPath("$[?(@.albumNumber == '2002')].currentSemester").value(1));

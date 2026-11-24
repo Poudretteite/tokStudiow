@@ -13,6 +13,14 @@ export interface Me {
     albumNumber: string | null;
     facultyId: string | null;
     academicTitle: string | null;
+    /** hasło startowe – do czasu zmiany dostępny jest tylko formularz zmiany hasła */
+    mustChangePassword: boolean;
+}
+
+/** Nowe hasło startowe po resecie – pokazywane jeden raz. */
+export interface PasswordReset {
+    email: string;
+    initialPassword: string;
 }
 
 export interface Study {
@@ -256,6 +264,7 @@ export interface AdminUser {
     email: string;
     role: Role;
     active: boolean;
+    mustChangePassword: boolean;
     createdAt: string;
     albumNumber: string | null;
     facultyId: string | null;

@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.tokstudiow.api.audit.AuditAction;
 import pl.tokstudiow.api.audit.AuditService;
+import pl.tokstudiow.api.auth.PasswordResetResponse;
+import pl.tokstudiow.api.auth.PasswordService;
 import pl.tokstudiow.api.common.BusinessRuleException;
 import pl.tokstudiow.api.common.ConflictException;
 import pl.tokstudiow.api.common.CurrentUser;
@@ -34,17 +36,20 @@ public class StudyService {
     private final FieldOfStudyRepository fields;
     private final DeanOfficeProfileRepository deanOfficeProfiles;
     private final AuditService audit;
+    private final PasswordService passwords;
 
     public StudyService(StudyRepository studies,
                         StudentProfileRepository studentProfiles,
                         FieldOfStudyRepository fields,
                         DeanOfficeProfileRepository deanOfficeProfiles,
-                        AuditService audit) {
+                        AuditService audit,
+                        PasswordService passwords) {
         this.studies = studies;
         this.studentProfiles = studentProfiles;
         this.fields = fields;
         this.deanOfficeProfiles = deanOfficeProfiles;
         this.audit = audit;
+        this.passwords = passwords;
     }
 
     // student
@@ -126,6 +131,19 @@ public class StudyService {
         study.update(request.currentSemester(), request.status());
         audit.record(AUDIT_ENTITY, id, AuditAction.UPDATE, before, snapshot(study));
         return StudyResponse.from(study);
+    }
+
+    /**
+     * Dziekanat nadaje nowe hasło startowe studentowi swojego wydziału (np. gdy zapomniał hasła).
+     * Student obcego wydziału daje 404 – tak jak każdy inny zasób spoza uprawnień.
+     */
+    @Transactional
+    public PasswordResetResponse resetStudentPassword(UUID studyId) {
+        UUID facultyId = myFacultyId();
+        Study study = studies.findDetailed(studyId)
+                .filter(s -> s.facultyId().equals(facultyId))
+                .orElseThrow(StudyService::notFound);
+        return passwords.reset(study.getStudent().getUser());
     }
 
     /**

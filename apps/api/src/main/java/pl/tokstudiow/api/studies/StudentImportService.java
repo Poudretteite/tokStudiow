@@ -91,7 +91,9 @@ public class StudentImportService {
         List<ImportedStudentResponse> imported = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             NormalizedRow row = rows.get(i);
-            User user = users.save(new User(row.firstName(), row.lastName(), row.email(), hashes.get(i), Role.STUDENT));
+            User account = new User(row.firstName(), row.lastName(), row.email(), hashes.get(i), Role.STUDENT);
+            account.requirePasswordChange();
+            User user = users.save(account);
             StudentProfile profile = studentProfiles.save(new StudentProfile(user, row.albumNumber(), null));
             Study study = studies.save(new Study(profile, field, request.startYear(), request.currentSemester()));
 

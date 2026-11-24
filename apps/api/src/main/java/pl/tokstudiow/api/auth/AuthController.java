@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -24,10 +25,12 @@ public class AuthController {
     private static final String WEB_CLIENT = "web";
 
     private final AuthService authService;
+    private final PasswordService passwordService;
     private final JwtProperties properties;
 
-    public AuthController(AuthService authService, JwtProperties properties) {
+    public AuthController(AuthService authService, PasswordService passwordService, JwtProperties properties) {
         this.authService = authService;
+        this.passwordService = passwordService;
         this.properties = properties;
     }
 
@@ -59,6 +62,18 @@ public class AuthController {
         if (isWeb(client)) {
             response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie("", Duration.ZERO).toString());
         }
+    }
+
+    /**
+     * Zmiana własnego hasła – także z tokenem „hasło startowe”, który na nic innego nie pozwala.
+     * Odpowiedź to nowa para tokenów (jak przy logowaniu); inne sesje konta zostają zakończone.
+     */
+    @PostMapping("/password")
+    public TokenResponse changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                        @AuthenticationPrincipal Jwt jwt,
+                                        @RequestHeader(name = CLIENT_HEADER, required = false) @Nullable String client,
+                                        HttpServletResponse response) {
+        return deliver(passwordService.changeOwn(UUID.fromString(jwt.getSubject()), request), client, response);
     }
 
     @GetMapping("/me")

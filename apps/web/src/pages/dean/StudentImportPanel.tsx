@@ -252,8 +252,8 @@ export function StudentImportPanel({
                             </Button>
                         </div>
                         <p className="text-sm text-muted">
-                            Przekaż hasła studentom osobiście lub inną bezpieczną drogą, nigdy w tym samym mailu co login. Po
-                            rozdaniu usuń plik z komputera.
+                            Przekaż hasła studentom osobiście lub inną bezpieczną drogą, nigdy w tym samym mailu co login. Przy
+                            pierwszym logowaniu każdy student musi ustawić własne hasło. Po rozdaniu usuń plik z komputera.
                         </p>
                     </div>
                 )}

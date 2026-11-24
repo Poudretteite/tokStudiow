@@ -14,6 +14,8 @@ import java.time.Instant;
 public class TokenService {
 
     public static final String ISSUER = "tokstudiow-api";
+    /** Obecny tylko w tokenie konta z hasłem startowym; takie konto ma dostęp wyłącznie do zmiany hasła. */
+    public static final String PASSWORD_CHANGE_CLAIM = "pwd_change";
 
     private final JwtEncoder encoder;
     private final JwtProperties properties;
@@ -25,15 +27,17 @@ public class TokenService {
 
     public String issueAccessToken(User user) {
         Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .issuer(ISSUER)
                 .issuedAt(now)
                 .expiresAt(now.plus(properties.accessTokenTtl()))
                 .subject(user.getId().toString())
-                .claim("role", user.getRole().name())
-                .build();
+                .claim("role", user.getRole().name());
+        if (user.isMustChangePassword()) {
+            claims.claim(PASSWORD_CHANGE_CLAIM, true);
+        }
 
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
     }
 }

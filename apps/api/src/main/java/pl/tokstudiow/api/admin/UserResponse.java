@@ -14,6 +14,8 @@ public record UserResponse(
         String email,
         Role role,
         boolean active,
+        // konto nie zmieniło jeszcze hasła startowego
+        boolean mustChangePassword,
         Instant createdAt,
         @Nullable String albumNumber,
         @Nullable UUID facultyId
@@ -26,6 +28,7 @@ public record UserResponse(
                 user.getEmail(),
                 user.getRole(),
                 user.isActive(),
+                user.isMustChangePassword(),
                 user.getCreatedAt(),
                 albumNumber,
                 facultyId);

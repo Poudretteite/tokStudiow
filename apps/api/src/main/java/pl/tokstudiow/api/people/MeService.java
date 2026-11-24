@@ -51,6 +51,6 @@ public class MeService {
         }
 
         return new MeResponse(user.getId(), user.getFirstName(), user.getLastName(), user.getEmail(),
-                user.getRole(), albumNumber, facultyId, academicTitle);
+                user.getRole(), albumNumber, facultyId, academicTitle, user.isMustChangePassword());
     }
 }
