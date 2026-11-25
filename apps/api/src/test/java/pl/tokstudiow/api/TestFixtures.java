@@ -34,6 +34,7 @@ public class TestFixtures {
     @Autowired StudyRepository studies;
     @Autowired ClassGroupRepository groups;
     @Autowired GroupEnrollmentRepository enrollments;
+    @Autowired RoomRepository rooms;
 
     public Faculty faculty(String name, String shortName) {
         return faculties.save(new Faculty(name, shortName));
@@ -113,5 +114,9 @@ public class TestFixtures {
 
     public GroupEnrollment enroll(ClassGroup group, Study study) {
         return enrollments.save(new GroupEnrollment(group, study));
+    }
+
+    public Room room(String building, String number, Integer capacity) {
+        return rooms.save(new Room(building, number, capacity == null ? null : capacity.shortValue()));
     }
 }

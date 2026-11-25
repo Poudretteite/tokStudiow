@@ -8,6 +8,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import pl.tokstudiow.api.schedule.ScheduleConflictException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -20,6 +21,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScheduleConflictException.class)
+    public ProblemDetail handleScheduleConflict(ScheduleConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty("conflicts", ex.getConflicts());
+        return problem;
     }
 
     /** 429 z nagłówkiem Retry-After (w sekundach), żeby klient wiedział, kiedy spróbować ponownie. */

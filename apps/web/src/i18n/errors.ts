@@ -63,6 +63,14 @@ const MESSAGES: Record<string, string> = {
     'Password is too easy to guess': 'To hasło łatwo odgadnąć – użyj kilku niepowiązanych słów.',
     'You cannot reset your own password': 'Własne hasło zmień w „Zmień hasło”, podając obecne.',
     'Account is deactivated': 'Konto jest zablokowane – nie można nadać mu hasła.',
+    'Schedule conflict': 'Nie dodano terminu – koliduje z innymi zajęciami.',
+    'Room is too small for this group': 'Sala jest za mała dla tej grupy.',
+    'Classes must end after they start': 'Koniec zajęć musi być po ich początku.',
+    'Classes must fit between 7:00 and 21:00': 'Zajęcia muszą mieścić się między 7:00 a 21:00.',
+    'Times must be multiples of 5 minutes': 'Godziny podawaj co 5 minut.',
+    'Day of week must be between 1 and 7': 'Wybierz dzień tygodnia.',
+    'Schedule entry not found': 'Nie znaleziono terminu – mógł zostać już usunięty.',
+    'Room not found': 'Nie znaleziono sali.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 

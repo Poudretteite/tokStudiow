@@ -5,6 +5,7 @@ import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
+import { MySchedulePage } from './pages/SchedulePage';
 import { GroupDetailsPage } from './pages/student/GroupDetailsPage';
 import { MyGroupsPage } from './pages/student/MyGroupsPage';
 import { TranscriptPage } from './pages/student/TranscriptPage';
@@ -24,6 +25,9 @@ export default function App() {
                 <Route path="/" element={<AppLayout />}>
                     <Route index element={<HomePage />} />
                     <Route path="password" element={<ChangePasswordPage />} />
+                    <Route element={<RequireRole roles={['STUDENT', 'LECTURER']} />}>
+                        <Route path="schedule" element={<MySchedulePage />} />
+                    </Route>
                     <Route element={<RequireRole roles={['STUDENT']} />}>
                         <Route path="groups" element={<MyGroupsPage />} />
                         <Route path="groups/:groupId" element={<GroupDetailsPage />} />

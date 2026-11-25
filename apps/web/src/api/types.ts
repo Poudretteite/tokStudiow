@@ -308,3 +308,42 @@ export interface ImportedStudent {
     albumNumber: string;
     initialPassword: string;
 }
+
+// ---------- plan zajęć ----------
+
+export interface Room {
+    id: string;
+    building: string;
+    number: string;
+    capacity: number | null;
+}
+
+export type WeekFrequency = 'WEEKLY' | 'ODD_WEEKS' | 'EVEN_WEEKS';
+
+export interface ScheduleEntry {
+    id: string;
+    groupId: string;
+    courseCode: string;
+    courseName: string;
+    componentType: ComponentType;
+    groupNumber: number;
+    lecturerName: string;
+    /** 1 = poniedziałek … 7 = niedziela */
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    frequency: WeekFrequency;
+    roomId: string;
+    roomLabel: string;
+}
+
+export interface Schedule {
+    term: { id: string; name: string; startDate: string; endDate: string } | null;
+    entries: ScheduleEntry[];
+}
+
+export interface ScheduleConflict {
+    type: 'GROUP' | 'ROOM' | 'LECTURER' | 'STUDENTS';
+    entry: ScheduleEntry;
+    studentCount: number | null;
+}
