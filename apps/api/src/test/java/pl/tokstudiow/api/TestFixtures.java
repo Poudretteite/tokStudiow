@@ -119,4 +119,10 @@ public class TestFixtures {
     public Room room(String building, String number, Integer capacity) {
         return rooms.save(new Room(building, number, capacity == null ? null : capacity.shortValue()));
     }
+
+    /** Drugi kierunek tej samej osoby: nowe studia na istniejącym profilu studenta. */
+    public Study secondStudy(Study first, FieldOfStudy field) {
+        StudentProfile profile = studentProfiles.findById(first.getStudent().getUserId()).orElseThrow();
+        return studies.save(new Study(profile, field, (short) 2026, (short) 1));
+    }
 }

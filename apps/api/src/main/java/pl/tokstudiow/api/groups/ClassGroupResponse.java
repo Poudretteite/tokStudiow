@@ -15,6 +15,9 @@ public record ClassGroupResponse(
         UUID gradingScaleId,
         UUID academicTermId,
         String academicTermName,
+        // daty semestru: od nich liczą się tygodnie planu (tydzień 1 = A)
+        LocalDate termStartDate,
+        LocalDate termEndDate,
         UUID lecturerId,
         String lecturerFirstName,
         String lecturerLastName,
@@ -39,6 +42,8 @@ public record ClassGroupResponse(
                 component.getGradingScale().getId(),
                 term.getId(),
                 term.getName(),
+                term.getStartDate(),
+                term.getEndDate(),
                 lecturer.getUserId(),
                 lecturer.getUser().getFirstName(),
                 lecturer.getUser().getLastName(),

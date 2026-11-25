@@ -10,7 +10,18 @@ import { Select } from '../../components/ui/Select';
 import { Table, Td, Th, Tr } from '../../components/ui/Table';
 import { TextField } from '../../components/ui/TextField';
 import { errorMessage } from '../../i18n/errors';
-import { DAYS, FREQUENCY_LABELS, conflictText, formatMinutes, timeRange, toMinutes } from '../../lib/schedule';
+import {
+    DAYS,
+    FREQUENCY_LABELS,
+    conflictText,
+    formatMinutes,
+    frequencyText,
+    termWeek,
+    timeRange,
+    toMinutes,
+    weekLetter,
+    weekMonday,
+} from '../../lib/schedule';
 
 /** Domyślna długość zajęć: dwie godziny lekcyjne. */
 const DEFAULT_MINUTES = 90;
@@ -65,7 +76,7 @@ export function DeanSchedule({ group }: { group: ClassGroup }) {
                                         <Td>{DAYS[e.dayOfWeek - 1].name}</Td>
                                         <Td className="tabular-nums">{timeRange(e)}</Td>
                                         <Td>{e.roomLabel}</Td>
-                                        <Td>{FREQUENCY_LABELS[e.frequency]}</Td>
+                                        <Td>{frequencyText(e)}</Td>
                                         <Td className="text-right">
                                             <Button
                                                 type="button"
@@ -117,6 +128,9 @@ function AddEntryForm({
     const [endTouched, setEndTouched] = useState(false);
     const [frequency, setFrequency] = useState<WeekFrequency>('WEEKLY');
     const [roomId, setRoomId] = useState('');
+    const [weeks, setWeeks] = useState<number[]>([]);
+    const termWeeks = termWeek(group.termStartDate, group.termEndDate);
+    const selectingWeeks = frequency === 'SELECTED_WEEKS';
     const sortedRooms = [...rooms].sort((a, b) => `${a.building} ${a.number}`.localeCompare(`${b.building} ${b.number}`, 'pl'));
     const needed = group.capacity;
 
@@ -124,7 +138,14 @@ function AddEntryForm({
         mutationFn: () =>
             api<ScheduleEntry>(`/api/dean-office/groups/${encodeURIComponent(group.id)}/schedule`, {
                 method: 'POST',
-                body: JSON.stringify({ dayOfWeek: Number(day), startTime: start, endTime: end, frequency, roomId }),
+                body: JSON.stringify({
+                    dayOfWeek: Number(day),
+                    startTime: start,
+                    endTime: end,
+                    frequency,
+                    roomId,
+                    weeks: selectingWeeks ? weeks : null,
+                }),
             }),
         onSuccess: async (entry) => {
             await queryClient.invalidateQueries({ queryKey: scheduleKey });
@@ -204,9 +225,19 @@ function AddEntryForm({
                         })}
                     </Select>
                 </div>
+                {selectingWeeks && (
+                    <WeekPicker
+                        termStart={group.termStartDate}
+                        termWeeks={termWeeks}
+                        selected={weeks}
+                        onChange={setWeeks}
+                    />
+                )}
                 <p className="text-sm text-muted">
-                    Tygodnie liczą się od początku semestru (pierwszy jest nieparzysty). Zajęcia co dwa tygodnie w tej samej
-                    sali mogą się wymieniać: parzyste z nieparzystymi.
+                    Tygodnie liczą się od początku semestru: tydzień 1 to A, tydzień 2 to B i tak dalej. Dwie grupy (np.
+                    laboratoryjne) mogą dzielić salę, prowadzącego i godzinę, jeśli jedna ma zajęcia w tygodnie A, a druga w
+                    B. Gdy plan zmienia się co tydzień (np. kierunki medyczne) albo trzeba pominąć przerwę, wybierz konkretne
+                    tygodnie.
                 </p>
 
                 {add.isError && (
@@ -223,12 +254,84 @@ function AddEntryForm({
                 )}
 
                 <div>
-                    <Button type="submit" loading={add.isPending} disabled={!roomId}>
+                    <Button type="submit" loading={add.isPending} disabled={!roomId || (selectingWeeks && weeks.length === 0)}>
                         Dodaj termin
                     </Button>
                 </div>
             </form>
         </Panel>
+    );
+}
+
+/**
+ * Wybór tygodni semestru jednym kliknięciem na tydzień, ze skrótami: wszystkie A, wszystkie B,
+ * cały semestr. Przy każdym tygodniu data poniedziałku, żeby łatwo pominąć przerwę świąteczną.
+ */
+function WeekPicker({
+    termStart,
+    termWeeks,
+    selected,
+    onChange,
+}: {
+    termStart: string;
+    termWeeks: number;
+    selected: number[];
+    onChange: (weeks: number[]) => void;
+}) {
+    const all = Array.from({ length: termWeeks }, (_, i) => i + 1);
+    const chosen = new Set(selected);
+    const toggle = (week: number) =>
+        onChange(chosen.has(week) ? selected.filter((w) => w !== week) : [...selected, week].sort((a, b) => a - b));
+    const mondayLabel = (week: number) => {
+        const [, month, dayOfMonth] = weekMonday(termStart, week).split('-');
+        return `${Number(dayOfMonth)}.${month}`;
+    };
+
+    return (
+        <fieldset>
+            <legend className="mb-1 text-sm font-semibold">
+                Tygodnie <span className="font-normal text-muted">(wybrano: {selected.length})</span>
+            </legend>
+            <div className="mb-2 flex flex-wrap gap-2 text-sm">
+                {[
+                    { label: 'Wszystkie A', weeks: all.filter((w) => w % 2 === 1) },
+                    { label: 'Wszystkie B', weeks: all.filter((w) => w % 2 === 0) },
+                    { label: 'Cały semestr', weeks: all },
+                    { label: 'Wyczyść', weeks: [] },
+                ].map((preset) => (
+                    <Button
+                        key={preset.label}
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-1 text-sm"
+                        onClick={() => onChange(preset.weeks)}
+                    >
+                        {preset.label}
+                    </Button>
+                ))}
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8 lg:grid-cols-11">
+                {all.map((week) => {
+                    const on = chosen.has(week);
+                    return (
+                        <button
+                            key={week}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => toggle(week)}
+                            className={`rounded-sm border px-1 py-1 text-center text-sm leading-tight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${
+                                on ? 'border-navy bg-navy text-white' : 'border-line bg-white hover:border-navy'
+                            }`}
+                        >
+                            <span className="block font-semibold">
+                                {week} {weekLetter(week)}
+                            </span>
+                            <span className={`block text-xs ${on ? 'opacity-85' : 'text-muted'}`}>{mondayLabel(week)}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </fieldset>
     );
 }
 

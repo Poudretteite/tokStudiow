@@ -3,11 +3,14 @@ import type { ScheduleEntry } from '../api/types';
 import {
     appliesInWeek,
     conflictText,
+    formatWeeks,
+    frequencyText,
     hourRange,
     placeDay,
     termWeek,
     timeRange,
     visibleDays,
+    weekLetter,
     weekMonday,
 } from './schedule';
 
@@ -24,6 +27,7 @@ function entry(overrides: Partial<ScheduleEntry>): ScheduleEntry {
         startTime: '08:00:00',
         endTime: '09:30:00',
         frequency: 'WEEKLY',
+        weeks: [],
         roomId: 'r',
         roomLabel: 'A, s. 101',
         ...overrides,
@@ -52,13 +56,28 @@ describe('termWeek', () => {
     });
 });
 
-describe('appliesInWeek', () => {
-    it('shows odd and even week classes only in their weeks', () => {
-        expect(appliesInWeek('WEEKLY', 4)).toBe(true);
-        expect(appliesInWeek('ODD_WEEKS', 1)).toBe(true);
-        expect(appliesInWeek('ODD_WEEKS', 2)).toBe(false);
-        expect(appliesInWeek('EVEN_WEEKS', 2)).toBe(true);
-        expect(appliesInWeek('EVEN_WEEKS', 3)).toBe(false);
+describe('weeks A/B and selected weeks', () => {
+    it('shows week A, week B and selected week classes only in their weeks', () => {
+        expect(appliesInWeek({ frequency: 'WEEKLY', weeks: [] }, 4)).toBe(true);
+        expect(appliesInWeek({ frequency: 'ODD_WEEKS', weeks: [] }, 1)).toBe(true);
+        expect(appliesInWeek({ frequency: 'ODD_WEEKS', weeks: [] }, 2)).toBe(false);
+        expect(appliesInWeek({ frequency: 'EVEN_WEEKS', weeks: [] }, 2)).toBe(true);
+        expect(appliesInWeek({ frequency: 'EVEN_WEEKS', weeks: [] }, 3)).toBe(false);
+        expect(appliesInWeek({ frequency: 'SELECTED_WEEKS', weeks: [1, 4] }, 4)).toBe(true);
+        expect(appliesInWeek({ frequency: 'SELECTED_WEEKS', weeks: [1, 4] }, 3)).toBe(false);
+    });
+
+    it('names weeks A (odd) and B (even)', () => {
+        expect(weekLetter(1)).toBe('A');
+        expect(weekLetter(2)).toBe('B');
+        expect(weekLetter(9)).toBe('A');
+    });
+
+    it('describes selected weeks compactly', () => {
+        expect(formatWeeks([9, 1, 2, 3, 5, 10])).toBe('1–3, 5, 9–10');
+        expect(frequencyText({ frequency: 'SELECTED_WEEKS', weeks: [7] })).toBe('tydzień 7');
+        expect(frequencyText({ frequency: 'SELECTED_WEEKS', weeks: [1, 2, 4] })).toBe('tygodnie 1–2, 4');
+        expect(frequencyText({ frequency: 'EVEN_WEEKS', weeks: [] })).toBe('tydzień B');
     });
 });
 
@@ -93,7 +112,7 @@ describe('texts', () => {
 
     it('describes conflicts in Polish', () => {
         expect(conflictText({ type: 'ROOM', entry: entry({ frequency: 'ODD_WEEKS' }), studentCount: null })).toBe(
-            'Sala A, s. 101 jest zajęta: Bazy danych (laboratorium, gr. 2), poniedziałek 8:00–9:30, tygodnie nieparzyste.',
+            'Sala A, s. 101 jest zajęta: Bazy danych (laboratorium, gr. 2), poniedziałek 8:00–9:30, tydzień A.',
         );
         expect(conflictText({ type: 'STUDENTS', entry: entry({}), studentCount: 3 })).toContain('Studenci tej grupy (3)');
     });

@@ -2,8 +2,9 @@ import type { ScheduleConflict, ScheduleEntry, WeekFrequency } from '../api/type
 import { COMPONENT_LABELS } from '../i18n/labels';
 
 /**
- * Logika planu zajęć bez Reacta: tygodnie semestru, parzystość, rozkład bloków w siatce.
+ * Logika planu zajęć bez Reacta: tygodnie semestru, tygodnie A/B, rozkład bloków w siatce.
  * Tydzień 1 to tydzień (od poniedziałku), w którym zaczyna się semestr – tak samo liczy serwer.
+ * Tydzień A to tygodnie nieparzyste (1., 3., …), tydzień B – parzyste.
  */
 
 export const DAYS: { day: number; short: string; name: string }[] = [
@@ -18,9 +19,38 @@ export const DAYS: { day: number; short: string; name: string }[] = [
 
 export const FREQUENCY_LABELS: Record<WeekFrequency, string> = {
     WEEKLY: 'co tydzień',
-    ODD_WEEKS: 'tygodnie nieparzyste',
-    EVEN_WEEKS: 'tygodnie parzyste',
+    ODD_WEEKS: 'tydzień A',
+    EVEN_WEEKS: 'tydzień B',
+    SELECTED_WEEKS: 'wybrane tygodnie',
 };
+
+/** Tydzień semestru jako A (nieparzysty) albo B (parzysty). */
+export function weekLetter(week: number): 'A' | 'B' {
+    return week % 2 === 1 ? 'A' : 'B';
+}
+
+/** [1, 2, 3, 5, 9, 10] → „1–3, 5, 9–10”. */
+export function formatWeeks(weeks: number[]): string {
+    const sorted = [...new Set(weeks)].sort((a, b) => a - b);
+    const parts: string[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+        let j = i;
+        while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) {
+            j++;
+        }
+        parts.push(i === j ? String(sorted[i]) : `${sorted[i]}–${sorted[j]}`);
+        i = j;
+    }
+    return parts.join(', ');
+}
+
+/** Opis częstotliwości jednego terminu, np. „tydzień A” albo „tygodnie 1–3, 5”. */
+export function frequencyText(entry: Pick<ScheduleEntry, 'frequency' | 'weeks'>): string {
+    if (entry.frequency === 'SELECTED_WEEKS') {
+        return `${entry.weeks.length === 1 ? 'tydzień' : 'tygodnie'} ${formatWeeks(entry.weeks)}`;
+    }
+    return FREQUENCY_LABELS[entry.frequency];
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -66,8 +96,17 @@ export function weekMonday(termStart: string, week: number): string {
     return new Date(day * DAY_MS).toISOString().slice(0, 10);
 }
 
-export function appliesInWeek(frequency: WeekFrequency, week: number): boolean {
-    return frequency === 'WEEKLY' || (frequency === 'ODD_WEEKS') === (week % 2 === 1);
+export function appliesInWeek(entry: Pick<ScheduleEntry, 'frequency' | 'weeks'>, week: number): boolean {
+    switch (entry.frequency) {
+        case 'WEEKLY':
+            return true;
+        case 'ODD_WEEKS':
+            return week % 2 === 1;
+        case 'EVEN_WEEKS':
+            return week % 2 === 0;
+        case 'SELECTED_WEEKS':
+            return entry.weeks.includes(week);
+    }
 }
 
 /** Dni do pokazania: zawsze poniedziałek–piątek, weekend tylko gdy są w nim zajęcia. */
@@ -146,7 +185,7 @@ export function groupLabel(entry: Pick<ScheduleEntry, 'componentType' | 'groupNu
 export function conflictText(conflict: ScheduleConflict): string {
     const e = conflict.entry;
     const day = DAYS.find((d) => d.day === e.dayOfWeek)?.name.toLowerCase() ?? '';
-    const when = `${day} ${timeRange(e)}${e.frequency === 'WEEKLY' ? '' : `, ${FREQUENCY_LABELS[e.frequency]}`}`;
+    const when = `${day} ${timeRange(e)}${e.frequency === 'WEEKLY' ? '' : `, ${frequencyText(e)}`}`;
     const what = `${e.courseName} (${groupLabel(e)})`;
     switch (conflict.type) {
         case 'GROUP':

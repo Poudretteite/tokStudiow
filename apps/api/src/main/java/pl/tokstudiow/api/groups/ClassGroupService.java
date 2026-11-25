@@ -11,6 +11,7 @@ import pl.tokstudiow.api.common.NotFoundException;
 import pl.tokstudiow.api.people.CurrentDeanOffice;
 import pl.tokstudiow.api.people.LecturerProfile;
 import pl.tokstudiow.api.people.LecturerProfileRepository;
+import pl.tokstudiow.api.schedule.ScheduleService;
 import pl.tokstudiow.api.studies.Study;
 import pl.tokstudiow.api.studies.StudyRepository;
 import pl.tokstudiow.api.studies.StudyStatus;
@@ -37,6 +38,7 @@ public class ClassGroupService {
     private final StudyRepository studies;
     private final CurrentDeanOffice deanOffice;
     private final AuditService audit;
+    private final ScheduleService schedule;
 
     public ClassGroupService(ClassGroupRepository groups,
                              GroupEnrollmentRepository enrollments,
@@ -45,7 +47,8 @@ public class ClassGroupService {
                              LecturerProfileRepository lecturers,
                              StudyRepository studies,
                              CurrentDeanOffice deanOffice,
-                             AuditService audit) {
+                             AuditService audit,
+                             ScheduleService schedule) {
         this.groups = groups;
         this.enrollments = enrollments;
         this.components = components;
@@ -54,6 +57,7 @@ public class ClassGroupService {
         this.studies = studies;
         this.deanOffice = deanOffice;
         this.audit = audit;
+        this.schedule = schedule;
     }
 
     // dziekanat: tworzenie grup
@@ -118,11 +122,17 @@ public class ClassGroupService {
                 .toList();
     }
 
-    /** Blokada wiersza grupy: dwa równoczesne zapisy na ostatnie miejsce wykonają się po kolei. */
+    /**
+     * Blokada wiersza grupy: dwa równoczesne zapisy na ostatnie miejsce wykonają się po kolei.
+     * Najpierw blokada planu semestru, potem wiersza grupy – w tej samej kolejności co przy
+     * dodawaniu terminu, więc zapis i zmiana planu nie zakleszczą się nawzajem.
+     */
     private ClassGroup lockedGroup(UUID groupId, UUID facultyId) {
-        return groups.findByIdForUpdate(groupId)
+        ClassGroup group = groups.findById(groupId)
                 .filter(g -> g.facultyId().equals(facultyId))
                 .orElseThrow(() -> new NotFoundException("Group not found"));
+        schedule.lockTerm(group.getAcademicTerm().getId());
+        return groups.findByIdForUpdate(groupId).orElseThrow(() -> new NotFoundException("Group not found"));
     }
 
     private Study studyInFaculty(UUID studyId, UUID facultyId) {
@@ -147,6 +157,9 @@ public class ClassGroupService {
         }
         if (group.getCapacity() != null && enrollments.countByClassGroupId(group.getId()) >= group.getCapacity()) {
             throw new ConflictException("Group is full");
+        }
+        if (schedule.clashesWithStudyPlan(group, study.getId())) {
+            throw new ConflictException("Student has another class at this time");
         }
 
         GroupEnrollment enrollment = enrollments.save(new GroupEnrollment(group, study));

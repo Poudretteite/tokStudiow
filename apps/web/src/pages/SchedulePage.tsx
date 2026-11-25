@@ -9,7 +9,7 @@ import { QueryState } from '../components/QueryState';
 import { Timetable } from '../components/Timetable';
 import { Button } from '../components/ui/Button';
 import { formatDate } from '../i18n/format';
-import { appliesInWeek, termWeek, todayIso, weekMonday } from '../lib/schedule';
+import { appliesInWeek, termWeek, todayIso, weekLetter, weekMonday } from '../lib/schedule';
 
 type View = 'week' | 'term';
 
@@ -51,13 +51,13 @@ export function SchedulePage({ endpoint, showLecturer }: { endpoint: string; sho
                         d.setUTCDate(d.getUTCDate() + day - 1);
                         dates[day] = `${d.getUTCDate()}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
                     }
-                    const shown = view === 'week' ? entries.filter((e) => appliesInWeek(e.frequency, week)) : entries;
+                    const shown = view === 'week' ? entries.filter((e) => appliesInWeek(e, week)) : entries;
 
                     return (
                         <Panel
                             title={
                                 view === 'week'
-                                    ? `Tydzień ${week} (${week % 2 === 1 ? 'nieparzysty' : 'parzysty'}), od ${formatDate(monday)}`
+                                    ? `Tydzień ${week} (${weekLetter(week)}), od ${formatDate(monday)}`
                                     : `Cały semestr: ${term.name}`
                             }
                             aside={

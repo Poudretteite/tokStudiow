@@ -30,6 +30,8 @@ const MESSAGES: Record<string, string> = {
     'Student is already enrolled in another group of this course component':
         'Ktoś z wybranych jest już zapisany do innej grupy tych zajęć. Nikogo nie zapisano.',
     'Group is full': 'Brak wolnych miejsc w grupie. Nikogo nie zapisano.',
+    'Student has another class at this time':
+        'Ktoś z wybranych ma w terminach tej grupy inne zajęcia (sprawdź plan zajęć). Nikogo nie zapisano.',
     'Group with this number already exists': 'Grupa o tym numerze już istnieje w tym semestrze.',
     'Study not found': 'Nie znaleziono studenta.',
     'Semester exceeds the length of the field of study': 'Semestr przekracza liczbę semestrów kierunku.',
@@ -69,6 +71,9 @@ const MESSAGES: Record<string, string> = {
     'Classes must fit between 7:00 and 21:00': 'Zajęcia muszą mieścić się między 7:00 a 21:00.',
     'Times must be multiples of 5 minutes': 'Godziny podawaj co 5 minut.',
     'Day of week must be between 1 and 7': 'Wybierz dzień tygodnia.',
+    'Choose at least one week': 'Zaznacz co najmniej jeden tydzień.',
+    'Weeks must be within the academic term': 'Wybrane tygodnie wykraczają poza semestr.',
+    'Weeks can be chosen only for selected weeks': 'Tygodnie wybiera się tylko przy opcji „wybrane tygodnie”.',
     'Schedule entry not found': 'Nie znaleziono terminu – mógł zostać już usunięty.',
     'Room not found': 'Nie znaleziono sali.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',

@@ -3,6 +3,7 @@ package pl.tokstudiow.api.schedule;
 import pl.tokstudiow.api.university.ComponentType;
 
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 /** Termin w planie z opisem zajęć – tyle, ile potrzeba do narysowania planu bez kolejnych zapytań. */
@@ -18,6 +19,8 @@ public record ScheduleEntryResponse(
         LocalTime startTime,
         LocalTime endTime,
         WeekFrequency frequency,
+        // numery tygodni dla SELECTED_WEEKS, w pozostałych przypadkach pusta lista
+        List<Integer> weeks,
         UUID roomId,
         String roomLabel
 ) {
@@ -40,6 +43,7 @@ public record ScheduleEntryResponse(
                 entry.getStartTime(),
                 entry.getEndTime(),
                 entry.getFrequency(),
+                entry.getWeeks(),
                 room.getId(),
                 room.getBuilding() + ", s. " + room.getNumber());
     }

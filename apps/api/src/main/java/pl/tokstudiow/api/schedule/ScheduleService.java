@@ -77,27 +77,25 @@ public class ScheduleService {
     public ScheduleEntryResponse add(UUID groupId, CreateScheduleEntryRequest request) {
         ClassGroup group = ownGroup(groupId);
         Room room = rooms.findById(request.roomId()).orElseThrow(() -> new NotFoundException("Room not found"));
-        TimeSlot slot = new TimeSlot(request.dayOfWeek(), request.startTime(), request.endTime(), request.frequency());
-        String problem = slot.problem();
+        TimeSlot slot = new TimeSlot(request.dayOfWeek(), request.startTime(), request.endTime(), request.frequency(),
+                request.weeks());
+        AcademicTerm term = group.getAcademicTerm();
+        String problem = slot.problem(TimeSlot.weeksInTerm(term.getStartDate(), term.getEndDate()));
         if (problem != null) {
             throw new BusinessRuleException(problem);
         }
 
-        UUID termId = group.getAcademicTerm().getId();
-        // jeden dziekanat naraz układa plan danego semestru – dwa równoległe zapisy nie zajmą tej samej sali
-        jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))) AS lock")
-                .param("key", "schedule:" + termId)
-                .query(Integer.class)
-                .single();
+        UUID termId = term.getId();
+        lockTerm(termId);
 
-        Map<UUID, Set<UUID>> studentsByGroup = studentsByGroup(termId);
-        Set<UUID> ownStudents = studentsByGroup.getOrDefault(groupId, Set.of());
+        Map<UUID, Set<UUID>> studiesByGroup = studiesByGroup(termId);
+        Set<UUID> ownStudents = studiesByGroup.getOrDefault(groupId, Set.of());
         int expected = group.getCapacity() != null ? Math.max(group.getCapacity(), ownStudents.size()) : ownStudents.size();
         if (room.getCapacity() != null && room.getCapacity() < expected) {
             throw new BusinessRuleException("Room is too small for this group");
         }
 
-        List<ScheduleConflict> conflicts = conflicts(group, room, slot, entries.findForTerm(termId), studentsByGroup);
+        List<ScheduleConflict> conflicts = conflicts(group, room, slot, entries.findForTerm(termId), studiesByGroup);
         if (!conflicts.isEmpty()) {
             throw new ScheduleConflictException(conflicts);
         }
@@ -116,6 +114,23 @@ public class ScheduleService {
         entries.delete(entry);
     }
 
+    /**
+     * Czy terminy tej grupy nakładają się z zajęciami studenta na tym samym kierunku (te same studia) –
+     * sprawdzane przy zapisie do grupy, żeby kolizji nie dało się wprowadzić „tylnymi drzwiami”.
+     * Zajęcia na drugim kierunku nie blokują zapisu: student sam godzi dwa kierunki.
+     * Wywołujący trzyma już {@link #lockTerm}, więc zapis i nowy termin nie miną się.
+     */
+    @Transactional(readOnly = true)
+    public boolean clashesWithStudyPlan(ClassGroup group, UUID studyId) {
+        List<TimeSlot> groupSlots = entries.findForGroup(group.getId()).stream().map(ScheduleEntry::slot).toList();
+        if (groupSlots.isEmpty()) {
+            return false;
+        }
+        return entries.findForStudy(group.getAcademicTerm().getId(), studyId).stream()
+                .filter(e -> !e.getClassGroup().getId().equals(group.getId()))
+                .anyMatch(e -> groupSlots.stream().anyMatch(slot -> slot.overlaps(e.slot())));
+    }
+
     // student i prowadzący
 
     @Transactional(readOnly = true)
@@ -131,12 +146,13 @@ public class ScheduleService {
     // pomocnicze
 
     /**
-     * Wszystkie kolizje nowego terminu z planem semestru. Studentów porównujemy po koncie,
-     * więc osoba na dwóch kierunkach też jest chroniona przed nakładaniem się zajęć.
+     * Wszystkie kolizje nowego terminu z planem semestru. Studentów porównujemy po studiach
+     * (student na konkretnym kierunku): oddzielne grupy, np. laboratoryjna 1 i 2, mogą mieć zajęcia
+     * w tym samym czasie, a student dwóch kierunków nie blokuje planu żadnego z nich.
      */
     static List<ScheduleConflict> conflicts(ClassGroup group, Room room, TimeSlot slot, List<ScheduleEntry> termEntries,
-                                            Map<UUID, Set<UUID>> studentsByGroup) {
-        Set<UUID> ownStudents = studentsByGroup.getOrDefault(group.getId(), Set.of());
+                                            Map<UUID, Set<UUID>> studiesByGroup) {
+        Set<UUID> ownStudents = studiesByGroup.getOrDefault(group.getId(), Set.of());
         UUID lecturerId = group.getLecturer().getUserId();
         List<ScheduleConflict> found = new ArrayList<>();
         for (ScheduleEntry other : termEntries) {
@@ -155,7 +171,7 @@ public class ScheduleService {
             if (otherGroup.getLecturer().getUserId().equals(lecturerId)) {
                 found.add(new ScheduleConflict(ScheduleConflict.Type.LECTURER, described, null));
             }
-            Set<UUID> shared = new HashSet<>(studentsByGroup.getOrDefault(otherGroup.getId(), Set.of()));
+            Set<UUID> shared = new HashSet<>(studiesByGroup.getOrDefault(otherGroup.getId(), Set.of()));
             shared.retainAll(ownStudents);
             if (!shared.isEmpty()) {
                 found.add(new ScheduleConflict(ScheduleConflict.Type.STUDENTS, described, shared.size()));
@@ -164,9 +180,18 @@ public class ScheduleService {
         return found;
     }
 
-    private Map<UUID, Set<UUID>> studentsByGroup(UUID termId) {
+    /** Zmiany planu i zapisy w jednym semestrze wykonują się po kolei (blokada do końca transakcji). */
+    @Transactional
+    public void lockTerm(UUID termId) {
+        jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))) AS lock")
+                .param("key", "schedule:" + termId)
+                .query(Integer.class)
+                .single();
+    }
+
+    private Map<UUID, Set<UUID>> studiesByGroup(UUID termId) {
         Map<UUID, Set<UUID>> result = new HashMap<>();
-        for (Object[] row : enrollments.findGroupStudentsInTerm(termId)) {
+        for (Object[] row : enrollments.findGroupStudiesInTerm(termId)) {
             result.computeIfAbsent((UUID) row[0], id -> new HashSet<>()).add((UUID) row[1]);
         }
         return result;
@@ -198,6 +223,9 @@ public class ScheduleService {
         snapshot.put("startTime", entry.getStartTime().toString());
         snapshot.put("endTime", entry.getEndTime().toString());
         snapshot.put("frequency", entry.getFrequency().name());
+        if (!entry.getWeeks().isEmpty()) {
+            snapshot.put("weeks", entry.getWeeks());
+        }
         return snapshot;
     }
 }

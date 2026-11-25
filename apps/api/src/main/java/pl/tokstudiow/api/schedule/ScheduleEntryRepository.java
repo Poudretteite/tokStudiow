@@ -51,6 +51,15 @@ public interface ScheduleEntryRepository extends JpaRepository<ScheduleEntry, UU
             """)
     List<ScheduleEntry> findForStudent(@Param("termId") UUID termId, @Param("studentId") UUID studentId);
 
+    /** Plan jednych studiów (student na konkretnym kierunku) – do kolizji przy zapisie do grupy. */
+    @Query("""
+            select s from ScheduleEntry s
+            join fetch s.classGroup g
+            where g.academicTerm.id = :termId
+              and exists (select 1 from GroupEnrollment e where e.classGroup = g and e.study.id = :studyId)
+            """)
+    List<ScheduleEntry> findForStudy(@Param("termId") UUID termId, @Param("studyId") UUID studyId);
+
     @Query("""
             select s from ScheduleEntry s
             join fetch s.classGroup g

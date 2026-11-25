@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { ScheduleEntry } from '../api/types';
-import { DAYS, FREQUENCY_LABELS, formatMinutes, groupLabel, hourRange, placeDay, timeRange, toMinutes, visibleDays } from '../lib/schedule';
+import { DAYS, formatMinutes, frequencyText, groupLabel, hourRange, placeDay, timeRange, toMinutes, visibleDays } from '../lib/schedule';
 
 /** Wysokość jednej minuty w siatce (px): 90 minut zajęć mieści czas, nazwę, salę, częstotliwość i prowadzącego. */
 const MINUTE_PX = 1;
@@ -146,7 +146,7 @@ function EntryDetails({
             <div className={muted}>
                 {groupLabel(entry)}, {entry.roomLabel}
             </div>
-            {entry.frequency !== 'WEEKLY' && <div className={muted}>{FREQUENCY_LABELS[entry.frequency]}</div>}
+            {entry.frequency !== 'WEEKLY' && <div className={muted}>{frequencyText(entry)}</div>}
             {showLecturer && <div className={muted}>{entry.lecturerName}</div>}
         </div>
     );

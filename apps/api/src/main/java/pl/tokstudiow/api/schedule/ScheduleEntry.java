@@ -8,7 +8,10 @@ import pl.tokstudiow.api.university.Room;
 
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Stały termin zajęć grupy w tygodniowym planie (tabela z V4). */
 @Entity
@@ -40,6 +43,10 @@ public class ScheduleEntry {
     @Column(nullable = false, length = 30)
     private WeekFrequency frequency;
 
+    /** Tylko dla wybranych tygodni: numery tygodni semestru, np. „1,3,4,9”. */
+    @Column(name = "selected_weeks", length = 200)
+    private String selectedWeeks;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -59,10 +66,20 @@ public class ScheduleEntry {
         this.startTime = slot.start();
         this.endTime = slot.end();
         this.frequency = slot.frequency();
+        this.selectedWeeks = slot.frequency() == WeekFrequency.SELECTED_WEEKS
+                ? slot.weeks().stream().map(String::valueOf).collect(Collectors.joining(","))
+                : null;
     }
 
     public TimeSlot slot() {
-        return new TimeSlot(dayOfWeek, startTime, endTime, frequency);
+        return new TimeSlot(dayOfWeek, startTime, endTime, frequency, getWeeks());
+    }
+
+    public List<Integer> getWeeks() {
+        if (selectedWeeks == null || selectedWeeks.isEmpty()) {
+            return List.of();
+        }
+        return Arrays.stream(selectedWeeks.split(",")).map(Integer::valueOf).toList();
     }
 
     public UUID getId() { return id; }

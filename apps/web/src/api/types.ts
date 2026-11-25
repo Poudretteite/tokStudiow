@@ -40,6 +40,9 @@ export interface ClassGroup {
     gradingScaleId: string;
     academicTermId: string;
     academicTermName: string;
+    /** daty semestru – od nich liczą się tygodnie planu (tydzień 1 = A) */
+    termStartDate: string;
+    termEndDate: string;
     lecturerId: string;
     lecturerFirstName: string;
     lecturerLastName: string;
@@ -318,7 +321,7 @@ export interface Room {
     capacity: number | null;
 }
 
-export type WeekFrequency = 'WEEKLY' | 'ODD_WEEKS' | 'EVEN_WEEKS';
+export type WeekFrequency = 'WEEKLY' | 'ODD_WEEKS' | 'EVEN_WEEKS' | 'SELECTED_WEEKS';
 
 export interface ScheduleEntry {
     id: string;
@@ -333,6 +336,8 @@ export interface ScheduleEntry {
     startTime: string;
     endTime: string;
     frequency: WeekFrequency;
+    /** numery tygodni semestru dla SELECTED_WEEKS, w pozostałych przypadkach pusta lista */
+    weeks: number[];
     roomId: string;
     roomLabel: string;
 }
