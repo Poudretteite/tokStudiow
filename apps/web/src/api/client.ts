@@ -1,4 +1,4 @@
-import type { RowError } from './types';
+import type { RowError, ScheduleConflict } from './types';
 
 /**
  * Token dostępu żyje wyłącznie w pamięci tego modułu – nie w localStorage,
@@ -17,11 +17,14 @@ export class ApiError extends Error {
     readonly status: number;
     /** błędy poszczególnych wierszy przy operacjach na wielu rekordach (np. imporcie) */
     readonly rows: RowError[];
+    /** kolizje terminu w planie zajęć (409 „Schedule conflict”) */
+    readonly conflicts: ScheduleConflict[];
 
-    constructor(status: number, message: string, rows: RowError[] = []) {
+    constructor(status: number, message: string, rows: RowError[] = [], conflicts: ScheduleConflict[] = []) {
         super(message);
         this.status = status;
         this.rows = rows;
+        this.conflicts = conflicts;
     }
 }
 
@@ -79,8 +82,8 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
         onSessionExpired?.();
     }
     if (!response.ok) {
-        const { detail, rows } = await errorBody(response);
-        throw new ApiError(response.status, detail, rows);
+        const { detail, rows, conflicts } = await errorBody(response);
+        throw new ApiError(response.status, detail, rows, conflicts);
     }
     if (response.status === 204) {
         return undefined as T;
@@ -88,11 +91,17 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
     return response.json() as Promise<T>;
 }
 
-async function errorBody(response: Response): Promise<{ detail: string; rows: RowError[] }> {
+async function errorBody(
+    response: Response,
+): Promise<{ detail: string; rows: RowError[]; conflicts: ScheduleConflict[] }> {
     try {
         const body = await response.json();
-        return { detail: body.detail ?? response.statusText, rows: Array.isArray(body.rows) ? body.rows : [] };
+        return {
+            detail: body.detail ?? response.statusText,
+            rows: Array.isArray(body.rows) ? body.rows : [],
+            conflicts: Array.isArray(body.conflicts) ? body.conflicts : [],
+        };
     } catch {
-        return { detail: response.statusText, rows: [] };
+        return { detail: response.statusText, rows: [], conflicts: [] };
     }
 }

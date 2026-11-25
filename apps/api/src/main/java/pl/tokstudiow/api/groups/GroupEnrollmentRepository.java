@@ -42,4 +42,11 @@ public interface GroupEnrollmentRepository extends JpaRepository<GroupEnrollment
             group by e.classGroup.id
             """)
     List<Object[]> countByClassGroupIds(@Param("classGroupIds") Collection<UUID> classGroupIds);
+
+    /** Które studia (student na kierunku) są zapisane do których grup w semestrze: [id grupy, id studiów]. */
+    @Query("""
+            select e.classGroup.id, e.study.id from GroupEnrollment e
+            where e.classGroup.academicTerm.id = :termId
+            """)
+    List<Object[]> findGroupStudiesInTerm(@Param("termId") UUID termId);
 }

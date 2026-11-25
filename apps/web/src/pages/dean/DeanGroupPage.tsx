@@ -18,6 +18,7 @@ import { gradeHint, parseGrade } from '../../i18n/grades';
 import { ATTEMPT_LABELS, COMPONENT_LABELS } from '../../i18n/labels';
 import { sessionSummary } from '../../lib/corrections';
 import { DeanPartialGrades } from './DeanPartialGrades';
+import { DeanSchedule } from './DeanSchedule';
 
 const ATTEMPT_ORDER: FinalAttempt[] = ['FIRST', 'SECOND', 'COMMISSION'];
 
@@ -48,6 +49,7 @@ export function DeanGroupPage() {
                                 { id: 'students', label: 'Studenci', content: <Students group={g} /> },
                                 { id: 'partial', label: 'Oceny cząstkowe', content: <DeanPartialGrades group={g} /> },
                                 { id: 'protocol', label: 'Protokół ocen', content: <Protocol group={g} /> },
+                                { id: 'schedule', label: 'Plan zajęć', content: <DeanSchedule group={g} /> },
                             ]}
                         />
                     </>
