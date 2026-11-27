@@ -3,6 +3,9 @@ package pl.tokstudiow.api;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistrar;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -24,6 +27,18 @@ public class TestcontainersConfiguration {
     @Bean
     DynamicPropertyRegistrar testProperties() {
         return registry -> registry.add("app.jwt.secret", () -> TEST_JWT_SECRET);
+    }
+
+    /**
+     * BCrypt w testach z kosztem 4 zamiast 12: jedno haszowanie trwa ok. 1 ms zamiast 250–300 ms,
+     * a testy zakładają konta i logują się setki razy. Sprawdzają logikę (kto może się zalogować,
+     * blokady, reset hasła), a nie koszt haszowania. Algorytm jest ten sam co w produkcji, tylko z mniejszą
+     * liczbą rund. Produkcyjny koszt 12 pilnuje osobny test jednostkowy {@code PasswordConfigTest}.
+     */
+    @Bean
+    @Primary
+    PasswordEncoder fastTestPasswordEncoder() {
+        return new BCryptPasswordEncoder(4);
     }
 
     @Bean
