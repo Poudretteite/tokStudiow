@@ -3,6 +3,7 @@ import { RequireAuth } from './auth/RequireAuth';
 import { RequireRole } from './auth/RequireRole';
 import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/HomePage';
+import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MySchedulePage } from './pages/SchedulePage';
@@ -25,6 +26,7 @@ export default function App() {
                 <Route path="/" element={<AppLayout />}>
                     <Route index element={<HomePage />} />
                     <Route path="password" element={<ChangePasswordPage />} />
+                    <Route path="announcements" element={<AnnouncementsPage />} />
                     <Route element={<RequireRole roles={['STUDENT', 'LECTURER']} />}>
                         <Route path="schedule" element={<MySchedulePage />} />
                     </Route>

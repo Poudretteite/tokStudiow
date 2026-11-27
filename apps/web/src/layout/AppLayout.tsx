@@ -8,22 +8,26 @@ import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 const NAVIGATION: Record<Role, { label: string; to: string }[]> = {
     STUDENT: [
         { label: 'Strona główna', to: '/' },
+        { label: 'Ogłoszenia', to: '/announcements' },
         { label: 'Plan zajęć', to: '/schedule' },
         { label: 'Moje zajęcia', to: '/groups' },
         { label: 'Indeks', to: '/transcript' },
     ],
     LECTURER: [
         { label: 'Strona główna', to: '/' },
+        { label: 'Ogłoszenia', to: '/announcements' },
         { label: 'Plan zajęć', to: '/schedule' },
         { label: 'Moje grupy', to: '/teaching' },
     ],
     DEAN_OFFICE: [
         { label: 'Strona główna', to: '/' },
+        { label: 'Ogłoszenia', to: '/announcements' },
         { label: 'Grupy zajęciowe', to: '/dean/groups' },
         { label: 'Studenci', to: '/dean/students' },
     ],
     ADMIN: [
         { label: 'Strona główna', to: '/' },
+        { label: 'Ogłoszenia', to: '/announcements' },
         { label: 'Użytkownicy', to: '/admin/users' },
         { label: 'Dziennik zdarzeń', to: '/admin/audit' },
     ],

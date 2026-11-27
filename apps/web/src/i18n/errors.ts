@@ -76,6 +76,9 @@ const MESSAGES: Record<string, string> = {
     'Weeks can be chosen only for selected weeks': 'Tygodnie wybiera się tylko przy opcji „wybrane tygodnie”.',
     'Schedule entry not found': 'Nie znaleziono terminu – mógł zostać już usunięty.',
     'Room not found': 'Nie znaleziono sali.',
+    'Announcement not found': 'Nie znaleziono ogłoszenia – mogło zostać usunięte.',
+    'Choose who the announcement is for': 'Wybierz, do kogo jest ogłoszenie.',
+    'Announcement for everyone has no target': 'Ogłoszenie dla całej uczelni nie ma wybranej grupy ani kierunku.',
     'Data conflict': 'Ktoś zmienił te dane w międzyczasie. Odśwież stronę i spróbuj ponownie.',
 };
 
