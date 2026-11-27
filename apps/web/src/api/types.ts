@@ -352,3 +352,28 @@ export interface ScheduleConflict {
     entry: ScheduleEntry;
     studentCount: number | null;
 }
+
+// ---------- ogłoszenia ----------
+
+export type AnnouncementTargetType = 'GROUP' | 'FIELD_OF_STUDY' | 'FACULTY' | 'ALL';
+
+export interface AnnouncementTarget {
+    type: AnnouncementTargetType;
+    id: string | null;
+    name: string;
+    componentType: ComponentType | null;
+    groupNumber: number | null;
+}
+
+export interface Announcement {
+    id: string;
+    title: string;
+    /** zwykły tekst – wyświetlany zawsze jako tekst, nigdy jako HTML */
+    content: string;
+    authorName: string;
+    target: AnnouncementTarget;
+    createdAt: string;
+    updatedAt: string;
+    canEdit: boolean;
+    canDelete: boolean;
+}

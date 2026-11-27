@@ -2,8 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { api } from '../api/client';
-import type { Study } from '../api/types';
+import type { Announcement, Study } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { AnnouncementList } from '../components/AnnouncementList';
+import { ANNOUNCEMENTS_KEY } from '../lib/announcements';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { QueryState } from '../components/QueryState';
@@ -17,6 +19,10 @@ export function HomePage() {
         queryKey: ['me', 'studies'],
         queryFn: () => api<Study[]>('/api/me/studies'),
         enabled: isStudent,
+    });
+    const announcements = useQuery({
+        queryKey: ANNOUNCEMENTS_KEY,
+        queryFn: () => api<Announcement[]>('/api/announcements'),
     });
 
     if (!user) {
@@ -36,6 +42,21 @@ export function HomePage() {
         <>
             <PageHeader title="Strona główna" />
             <p className="mb-6">Witaj, {user.firstName}.</p>
+
+            <div className="mb-6">
+                <Panel
+                    title="Ogłoszenia"
+                    aside={
+                        <Link to="/announcements" className="text-sm font-semibold text-navy underline-offset-2 hover:underline">
+                            Wszystkie
+                        </Link>
+                    }
+                >
+                    <QueryState query={announcements}>
+                        {(items) => <AnnouncementList items={items.slice(0, 3)} compact />}
+                    </QueryState>
+                </Panel>
+            </div>
 
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="flex flex-col gap-6">
